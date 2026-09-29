@@ -109,6 +109,7 @@ export class IntentsService {
     private readonly configService: ConfigService<AppConfig, true>,
     private readonly stellarTxService: StellarTxService,
     private readonly prisma: PrismaService,
+    private readonly protocolParamsService: ProtocolParamsService,
     /**
      * Shadow-mode divergence monitor (issue #401).
      *
@@ -128,7 +129,6 @@ export class IntentsService {
      * this is always present.
      */
     @Optional() private readonly metricsService?: MetricsService,
-    private readonly protocolParamsService: ProtocolParamsService,
     @Optional() private readonly flags?: FeatureFlagService,
   ) {}
 
@@ -533,9 +533,6 @@ export class IntentsService {
         nativeToScVal(intent.deadline, { type: "u64" }),
       ]),
     );
-    const snapshot = this.protocolParamsService.snapshotForChain(intent.srcChain);
-    const fillWindow = snapshot.fillWindowSeconds;
-    return this.repo.acceptIfOpen(id, solver, nowSec + fillWindow, nowSec);
   }
 
   /**
@@ -654,6 +651,7 @@ export class IntentsService {
       // corrupt, so skip the simulation rather than encoding a null address —
       // the sweep loop already logs that case loudly.
       if (subject?.solver) {
+        const solver = subject.solver;
         this.reportShadow(
           "slash",
           subject.intentId,
@@ -661,9 +659,9 @@ export class IntentsService {
           "slash_intent",
           this.safeArgs(() => [
             nativeToScVal(subject.intentId, { type: "string" }),
-            new Address(subject.solver).toScVal(),
-            nativeToScVal(patch.slashReason, { type: "string" }),
-            nativeToScVal(patch.slashedAt, { type: "u64" }),
+            new Address(solver).toScVal(),
+            nativeToScVal(patch.slashReason ?? "", { type: "string" }),
+            nativeToScVal(patch.slashedAt ?? 0, { type: "u64" }),
           ]),
         );
       }

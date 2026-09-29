@@ -25,13 +25,7 @@ import { GovernanceModule } from "../governance/governance.module";
   // SorobanModule through HealthModule before IntentsModule has finished).
   // `forwardRef` on the SorobanModule import mirrors the one in SorobanModule:
   // the two modules need each other (ShadowService here, IntentsService there).
-  imports: [
-    forwardRef(() => SolversModule),
-    RoutingModule,
-    TokensModule,
-    forwardRef(() => SorobanModule),
-  ],
-  imports: [forwardRef(() => SolversModule), RoutingModule, TokensModule, SorobanModule, GovernanceModule],
+  imports: [forwardRef(() => SolversModule), RoutingModule, TokensModule, forwardRef(() => SorobanModule), GovernanceModule],
   controllers: [IntentsController],
   providers: [
     // Select the persistence adapter based on INTENTS_PERSISTENCE env var.

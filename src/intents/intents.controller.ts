@@ -30,6 +30,7 @@ import { IntentsGateway } from "./intents.gateway";
 import { SolversService } from "../solvers/solvers.service";
 import { TokensService } from "../tokens/tokens.service";
 import { RoutingService } from "../routing/routing.service";
+import { FeesService } from "../fees/fees.service";
 import { MAX_OPEN_INTENTS_PER_USER } from "./intents.service";
 import { CreateIntentDto } from "./dto/create-intent.dto";
 import { CHAIN_DEADLINE_DEFAULTS, DEFAULT_DEADLINE_SECONDS } from "../config/configuration";
@@ -49,7 +50,6 @@ import {
 } from "../common/stellar-signature";
 import {
   applyVarianceScale,
-  calculateProtocolFee,
   parseBaseUnits,
   toDecimalNumber,
   varianceScaleFromPerfScore,
@@ -75,6 +75,7 @@ export class IntentsController {
     private readonly intentsGateway: IntentsGateway,
     private readonly tokensService: TokensService,
     private readonly routingService: RoutingService,
+    private readonly fees: FeesService,
     private readonly killSwitch: KillSwitchService,
     config: ConfigService<AppConfig, true>,
   ) {
@@ -442,12 +443,19 @@ export class IntentsController {
       });
     }
 
-    const feeAmount = (BigInt(dto.fillAmount) * 5n) / 10000n;
+    const quotedFee = this.fees.quote({
+      amount: fillAmount,
+      srcChain: intent.srcChain,
+      dstChain: "stellar",
+      srcToken: intent.srcToken.symbol,
+      dstToken: intent.dstToken.symbol,
+      referralCode: dto.referralCode,
+    });
 
     const updated = await this.intentsService.fillIfAccepted(id, dto.solver, {
       filledAt: now,
       fillAmount: dto.fillAmount,
-      feeAmount: feeAmount.toString(),
+      feeAmount: quotedFee.fee,
       txHash: dto.txHash,
     });
     if (!updated) {
@@ -457,6 +465,8 @@ export class IntentsController {
       }
       throw new ConflictException(`Intent is ${current?.state ?? "unknown"}, cannot fill`);
     }
+
+    this.fees.post(quotedFee, id, intent.user, now);
 
     await this.solversService.recordSuccessfulFill(dto.solver);
 
@@ -545,7 +555,15 @@ export class IntentsController {
         const perfScore = successRate * 0.7 + fillCountScore * 0.3;
         const varianceScaled = varianceScaleFromPerfScore(perfScore);
         const dstAmount = applyVarianceScale(srcAmountBigInt, varianceScaled);
-        const fee = calculateProtocolFee(dstAmount); // 0.05%
+        const quotedFee = this.fees.quote({
+          amount: dstAmount,
+          srcChain: dto.srcChain,
+          dstChain: "stellar",
+          srcToken: dto.srcTokenSymbol,
+          dstToken: dto.dstTokenSymbol,
+          referralCode: dto.referralCode,
+        });
+        const fee = BigInt(quotedFee.fee);
 
         // Issue #126: compute USD fee total and price impact.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -590,6 +608,10 @@ export class IntentsController {
           solverName: solver.name,
           dstAmount: dstAmount.toString(),
           fee: fee.toString(),
+          treasuryFee: quotedFee.treasuryFee,
+          integratorFee: quotedFee.integratorFee,
+          feeRuleVersion: quotedFee.ruleVersion,
+          referralCode: quotedFee.referralCode,
           fillTime: solver.avgFillTime + Math.floor(Math.random() * 30),
           expiresAt: Math.floor(Date.now() / 1000) + 60,
           totalFeesUSD,
@@ -661,7 +683,14 @@ export class IntentsController {
         const variancePct = (1 - perfScore) * 0.008;
         const varianceScaled = Math.round(1000 * (1 - variancePct));
         const dstAmount = (srcAmountBigInt * BigInt(varianceScaled)) / BigInt(1000);
-        const fee = (dstAmount * BigInt(5)) / BigInt(10000);
+        const quotedFee = this.fees.quote({
+          amount: dstAmount,
+          srcChain: intent.srcChain,
+          dstChain: "stellar",
+          srcToken: srcToken.symbol,
+          dstToken: dstToken.symbol,
+        });
+        const fee = BigInt(quotedFee.fee);
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const feeUnits = Number(fee) / Math.pow(10, (dstToken as any)?.decimals ?? 7);
@@ -693,6 +722,10 @@ export class IntentsController {
           solverName: solver.name,
           dstAmount: dstAmount.toString(),
           fee: fee.toString(),
+          treasuryFee: quotedFee.treasuryFee,
+          integratorFee: quotedFee.integratorFee,
+          feeRuleVersion: quotedFee.ruleVersion,
+          referralCode: quotedFee.referralCode,
           fillTime: solver.avgFillTime + Math.floor(Math.random() * 30),
           expiresAt: Math.floor(Date.now() / 1000) + 60,
           totalFeesUSD,

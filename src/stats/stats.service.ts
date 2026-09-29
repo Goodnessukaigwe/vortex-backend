@@ -7,6 +7,7 @@ import { IntentsService } from "../intents/intents.service";
 import { SUPPORTED_CHAINS } from "../intents/intents.types";
 import { SolversService } from "../solvers/solvers.service";
 import { IntentsGateway } from "../intents/intents.gateway";
+import { FeesService } from "../fees/fees.service";
 
 @Injectable()
 export class StatsService {
@@ -15,6 +16,7 @@ export class StatsService {
     private readonly solversService: SolversService,
     private readonly intentsGateway: IntentsGateway,
     @Optional() config?: ConfigService<AppConfig, true>,
+    @Optional() private readonly fees?: FeesService,
   ) {
     this.canary = new Set(config?.get("canaryAddresses", { infer: true }) ?? []);
   }
@@ -152,13 +154,16 @@ export class StatsService {
       byChain.set(intent.srcChain, entry);
     }
 
+    const ledger = this.fees?.totals();
+    const fromLedger = ledger !== undefined && ledger.entryCount > 0;
+
     return {
       allTime: {
-        totalFees: allTime.toString(),
+        totalFees: fromLedger ? ledger.totalFees : allTime.toString(),
         filledIntents: intents.filter((intent) => typeof intent.feeAmount === "string" && intent.feeAmount.length > 0).length,
       },
       last24h: {
-        totalFees: last24h.toString(),
+        totalFees: fromLedger ? ledger.last24hFees : last24h.toString(),
         filledIntents: intents.filter(
           (intent) =>
             typeof intent.feeAmount === "string" &&
@@ -173,6 +178,14 @@ export class StatsService {
         last24hFees: stats.last24hFees.toString(),
         filledIntents: stats.filledCount,
       })),
+      ledger: ledger ?? {
+        entryCount: 0,
+        totalFees: "0",
+        treasuryFees: "0",
+        integratorFees: "0",
+        last24hFees: "0",
+        balanced: true as const,
+      },
     };
   }
 

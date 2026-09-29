@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { ProtocolParamsService } from "./params.service";
 import { ParamsController } from "./params.controller";
 import { SorobanModule } from "../soroban/soroban.module";
@@ -14,7 +14,7 @@ import { GuardianService } from "./guardian.service";
  * inject it to snapshot parameters at intent-creation time.
  */
 @Module({
-  imports: [SorobanModule],
+  imports: [forwardRef(() => SorobanModule)],
   controllers: [ParamsController, GuardianController],
   providers: [ProtocolParamsService, GuardianService],
   exports: [ProtocolParamsService, GuardianService],

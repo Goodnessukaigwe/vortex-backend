@@ -451,3 +451,27 @@ model GuardianAction {
   @@index([active])
   @@map("guardian_actions")
 }
+
+// ─── FeeLedgerEntry ──────────────────────────────────────────────────────────
+// Double-entry protocol fee postings (issue #438). A fill debits the user and
+// credits the treasury and, when a referral applies, the integrator.
+// Σ debits = Σ credits is checked in the application before insert.
+
+model FeeLedgerEntry {
+  id          String   @id @map("id")
+  intentId    String   @map("intent_id")
+  ruleId      String   @map("rule_id")
+  ruleVersion Int      @map("rule_version")
+  /// debit | credit
+  side        String   @map("side")
+  /// user | treasury | integrator
+  account     String   @map("account")
+  accountId   String   @map("account_id")
+  /// Base units, integer string.
+  amount      String   @map("amount")
+  createdAt   DateTime @map("created_at") @db.Timestamptz
+
+  @@index([intentId])
+  @@index([account, createdAt])
+  @@map("fee_ledger")
+}

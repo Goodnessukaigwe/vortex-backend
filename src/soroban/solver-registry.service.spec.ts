@@ -9,6 +9,7 @@ function makeConfigService(
   const stellar: AppConfig["stellar"] = {
     network: "testnet",
     sorobanRpcUrl: "https://soroban-testnet.stellar.org",
+    horizonUrl: "https://horizon-testnet.stellar.org",
     settlementContractId: "",
     solverRegistryContractId: "",
     signerSecretKey: "",
@@ -70,6 +71,24 @@ function makeConfigService(
       slowConsumerPolicy: "drop_oldest",
     },
     authJwtSecret: "",
+    treasury: { address: "" },
+    shadow: {
+      enabled: false,
+      sampleRate: 1,
+      queueMax: 256,
+      concurrency: 1,
+      sourceAccount: "",
+    },
+    datasets: {
+      enabled: false,
+      anonymize: true,
+      salt: "",
+      saltRotationHours: 24,
+      saltRetentionWindows: 2,
+      publicBucket: "vortex-public-datasets",
+      storageKind: "memory",
+      localDir: "./data/datasets",
+    },
     health: {
       roles: ["api", "ws", "worker"],
       checkIntervalMs: 5000,

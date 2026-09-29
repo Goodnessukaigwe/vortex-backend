@@ -9,6 +9,7 @@ import { InMemoryIntentsRepository } from "./intents.repository";
 import { logger } from "../common/logger";
 import { buildWsAuthMessage } from "../common/stellar-signature";
 import { ProtocolParamsService } from "../governance/params.service";
+import { IntentCapabilityIndex } from "./solver-intent-matcher";
 
 jest.mock("../common/logger", () => ({
   logger: {
@@ -134,7 +135,7 @@ describe("IntentsGateway heartbeat", () => {
     jest.clearAllMocks();
     intentsService = makeIntentsService();
     solversService = makeSolversService();
-    gateway = new IntentsGateway(intentsService, solversService);
+    gateway = new IntentsGateway(intentsService, solversService, new IntentCapabilityIndex(intentsService));
   });
 
   afterEach(() => {
@@ -231,10 +232,16 @@ describe("IntentsGateway heartbeat", () => {
     const signature = keypair.sign(Buffer.from(message, "utf8")).toString("base64");
 
     await client._listeners.message(JSON.stringify({ type: "auth", solver: keypair.publicKey(), timestamp, signature }));
-    expect(client.send).toHaveBeenLastCalledWith(JSON.stringify({ type: "auth_ok" }));
+    expect(client.send).toHaveBeenCalledWith(
+      JSON.stringify({ type: "auth_ok", method: "signature" }),
+      expect.any(Function),
+    );
 
     await client._listeners.message(JSON.stringify({ type: "auth", solver: keypair.publicKey(), timestamp, signature: "bad" }));
-    expect(client.send).toHaveBeenLastCalledWith(JSON.stringify({ type: "auth_error", reason: "invalid solver signature" }));
+    expect(client.send).toHaveBeenLastCalledWith(
+      JSON.stringify({ type: "auth_error", reason: "invalid solver signature" }),
+      expect.any(Function),
+    );
   });
 });
 
@@ -250,7 +257,7 @@ describe("IntentsGateway logging", () => {
     jest.clearAllMocks();
     intentsService = makeIntentsService();
     solversService = makeSolversService();
-    gateway = new IntentsGateway(intentsService, solversService);
+    gateway = new IntentsGateway(intentsService, solversService, new IntentCapabilityIndex(intentsService));
   });
 
   afterEach(() => {
@@ -259,7 +266,7 @@ describe("IntentsGateway logging", () => {
   });
 
   it("logs heartbeat started on construction", () => {
-    expect(logger.info).toHaveBeenCalledWith("ws heartbeat started");
+    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining("ws heartbeat started"));
   });
 
   it("logs connection with subscriber count", () => {
@@ -310,7 +317,7 @@ describe("IntentsGateway — chain subscription filtering (#257)", () => {
     jest.useFakeTimers();
     jest.clearAllMocks();
     intentsService = makeIntentsService();
-    gateway = new IntentsGateway(intentsService, makeSolversService());
+    gateway = new IntentsGateway(intentsService, makeSolversService(), new IntentCapabilityIndex(intentsService));
   });
 
   afterEach(() => {
@@ -467,7 +474,7 @@ describe("IntentsGateway — event replay (#258)", () => {
     jest.useFakeTimers();
     jest.clearAllMocks();
     intentsService = makeIntentsService();
-    gateway = new IntentsGateway(intentsService, makeSolversService());
+    gateway = new IntentsGateway(intentsService, makeSolversService(), new IntentCapabilityIndex(intentsService));
   });
 
   afterEach(() => {
@@ -504,7 +511,7 @@ describe("IntentsGateway — event replay (#258)", () => {
 
   it("returns replay_too_old when fromSeq has been evicted from the buffer", async () => {
     // Use a tiny ring buffer (capacity 2) to force eviction
-    const tinyGateway = new IntentsGateway(intentsService, makeSolversService());
+    const tinyGateway = new IntentsGateway(intentsService, makeSolversService(), new IntentCapabilityIndex(intentsService));
     // @ts-expect-error – accessing private field for test setup
     tinyGateway.ringBuffer["capacity"] = 2;
 

@@ -15,6 +15,11 @@ export class FillIntentDto {
   @Matches(/^\d+$/)
   fillAmount!: string;
 
+  @ApiPropertyOptional({ description: "Integrator referral code. Must match the quote for the realized split to match." })
+  @IsOptional()
+  @IsString()
+  referralCode?: string;
+
   @ApiPropertyOptional({ description: "Stellar fill transaction hash", maxLength: 128 })
   @IsOptional()
   @IsString()

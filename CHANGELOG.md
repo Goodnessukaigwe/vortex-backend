@@ -28,6 +28,7 @@ Commit message format is enforced via [commitlint](https://commitlint.js.org/) s
 ## [Unreleased]
 
 ### Added
+- Protocol fee engine with pair > chain > default rules, volume tiers, integrator referral share, and a double-entry fee ledger. Quotes include the fee split and rule version. Treasury stats read the ledger once it has postings (Closes #438).
 - `scripts/generate-client.ts` — generates a typed TypeScript API client from the live
   OpenAPI spec using `openapi-typescript` v7; output committed to `src/generated/`
   (Closes #134)
