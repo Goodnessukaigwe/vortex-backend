@@ -17,21 +17,23 @@ import { SorobanModule } from "../soroban/soroban.module";
 import { AppConfig } from "../config/configuration";
 import { PrismaService } from "../prisma/prisma.service";
 import { GovernanceModule } from "../governance/governance.module";
+import { TokenListPublisher } from "../tokens/admin-tokens.service";
+
+/** Side-effect provider: points token-list events at the WebSocket gateway. */
+export const TOKEN_LIST_WS_BINDING = Symbol("TOKEN_LIST_WS_BINDING");
 
 @Module({
   // Both SolversModule and SorobanModule import IntentsModule back, so both
   // edges of each cycle must be deferred — a bare import resolves to `undefined`
   // when the peer module is still mid-initialization (AppModule reaches
   // SorobanModule through HealthModule before IntentsModule has finished).
-  // `forwardRef` on the SorobanModule import mirrors the one in SorobanModule:
-  // the two modules need each other (ShadowService here, IntentsService there).
   imports: [
     forwardRef(() => SolversModule),
     RoutingModule,
     TokensModule,
     forwardRef(() => SorobanModule),
+    GovernanceModule,
   ],
-  imports: [forwardRef(() => SolversModule), RoutingModule, TokensModule, SorobanModule, GovernanceModule],
   controllers: [IntentsController],
   providers: [
     // Select the persistence adapter based on INTENTS_PERSISTENCE env var.
@@ -55,8 +57,15 @@ import { GovernanceModule } from "../governance/governance.module";
     backplaneHealthIndicator,
     IntentsSweeperService,
     IntentsMaintenanceJobs,
-    // Note: EventIngestionService is provided by SorobanModule (imported above)
-    // and exported from there — no re-declaration needed here.
+    {
+      provide: TOKEN_LIST_WS_BINDING,
+      inject: [TokenListPublisher, IntentsGateway],
+      useFactory: (publisher: TokenListPublisher, gateway: IntentsGateway) => {
+        publisher.publish = (event) =>
+          gateway.broadcast(event as unknown as { type: string; [key: string]: unknown });
+        return publisher;
+      },
+    },
   ],
   exports: [IntentsService, IntentsGateway, IntentCapabilityIndex],
 })

@@ -35,6 +35,9 @@ POST /api/v1/intents/quote        — get best quote from solvers
 GET  /api/v1/solvers              — solver leaderboard
 GET  /api/v1/solvers/:addr/stats  — solver performance stats
 GET  /api/v1/tokens               — supported tokens (filter by chain)
+POST /api/v1/admin/tokens         — register a token (admin key, on-chain metadata check)
+PATCH /api/v1/admin/tokens        — update status or re-verified metadata
+DELETE /api/v1/admin/tokens       — soft-delist a token (existing intents keep working)
 GET  /api/v1/stats                — protocol stats
 GET  /health                      — service health
 WS   /ws                          — real-time intent feed

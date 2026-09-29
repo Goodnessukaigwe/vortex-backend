@@ -1,6 +1,5 @@
 import { BadRequestException, Inject, Injectable } from "@nestjs/common";
 import { SUPPORTED_TOKENS, StellarToken } from "./tokens.data";
-import { SUPPORTED_TOKENS, STELLAR_TOKENS, StellarToken } from "./tokens.data";
 import { SupportedChain } from "../intents/intents.types";
 import { ITokensRepository, TOKENS_REPOSITORY, TokenRecord } from "./tokens.repository";
 
@@ -55,19 +54,11 @@ export class TokensService {
   ) {}
 
   /**
-   * Look up a source token by chain + address/contract.
-   *
-   * For Stellar source tokens the `address` parameter is the contract ID.
-   * For EVM chains it is the checksummed hex address.
-   *
-   * Returns `undefined` when no match is found — callers decide how to handle
-   * the "unknown token" case (e.g. fall back to a default priceUSD).
-   *
-   * @param chain   The source chain (stellar | ethereum | base | …)
-   * @param address Token contract/address string
+   * Look up a source token by chain + address/contract, including paused and
+   * delisted rows. Existing intents keep resolving after a soft delist.
    */
   async resolveSrcToken(chain: SupportedChain, address: string): Promise<ResolvedSrcToken | undefined> {
-    const token = await this.repo.findByAddressAndChain(address, chain);
+    const token = await Promise.resolve(this.repo.findByAddressAndChain(address, chain));
     if (!token) return undefined;
     return {
       kind: "src",
@@ -80,13 +71,9 @@ export class TokensService {
     };
   }
 
-  /**
-   * Look up a Stellar destination token by contract ID.
-   *
-   * Returns `undefined` when no match is found.
-   */
+  /** Look up a Stellar destination token by contract ID, including delisted rows. */
   async resolveDstToken(contract: string): Promise<ResolvedDstToken | undefined> {
-    const token = await this.repo.findByAddressAndChain(contract, "stellar");
+    const token = await Promise.resolve(this.repo.findByAddressAndChain(contract, "stellar"));
     if (!token) return undefined;
     return {
       kind: "dst",
@@ -99,17 +86,13 @@ export class TokensService {
   }
 
   /**
-   * Like {@link resolveSrcToken} but throws a `BadRequestException` instead of
-   * returning `undefined` when the chain + address does not resolve to a token
-   * in the configured registry (issue #276).
-   *
-   * Use this on the write path (intent creation) where an unrecognised token
-   * must be rejected outright rather than silently stored with no priceUSD.
+   * Like {@link resolveSrcToken} but rejects unknown, paused, and delisted
+   * tokens. Used on the create path. Reads of an already-stored intent do not
+   * come through here.
    */
-  async resolveSrcTokenOrThrow(
-    chain: SupportedChain,
-    address: string,
-  ): Promise<ResolvedSrcToken> {
+  async resolveSrcTokenOrThrow(chain: SupportedChain, address: string): Promise<ResolvedSrcToken> {
+    const stored = this.repo.findByAddressAndChain(address, chain);
+    this.assertOfferable(stored, address, chain);
     const token = await this.resolveSrcToken(chain, address);
     if (!token) {
       throw new BadRequestException(
@@ -119,31 +102,22 @@ export class TokensService {
     return token;
   }
 
-  /**
-   * Like {@link resolveDstToken} but throws a `BadRequestException` instead of
-   * returning `undefined` when the contract does not resolve to a known Stellar
-   * token (issue #276).
-   */
+  /** Like {@link resolveDstToken} but rejects unknown, paused, and delisted tokens. */
   async resolveDstTokenOrThrow(contract: string): Promise<ResolvedDstToken> {
+    const stored = this.repo.findByAddressAndChain(contract, "stellar");
+    this.assertOfferable(stored, contract, "stellar");
     const token = await this.resolveDstToken(contract);
     if (!token) {
-      throw new BadRequestException(
-        "Unknown destination token contract for the configured token registry",
-      );
+      throw new BadRequestException("Unknown destination token contract for the configured token registry");
     }
     return token;
   }
 
-  private toApiToken(record: TokenRecord): ApiToken {
   /**
    * Normalise a stored {@link TokenRecord} into the public token shape.
-   *
-   * Both `address` and `contract` are emitted with the same value so clients
-   * can read either field regardless of whether the token is EVM- or
-   * Stellar-native — the registry stores every token under `address`, but the
-   * Stellar side of the API has always used `contract`.
+   * Delisted rows are omitted by {@link getByChain}; this helper does not filter.
    */
-  private toApiToken(record: TokenRecord) {
+  private toApiToken(record: TokenRecord): ApiToken {
     return {
       address: record.address,
       contract: record.address,
@@ -154,92 +128,42 @@ export class TokensService {
     };
   }
 
-  getByChain(chain?: string): TokensByChainResponse {
-    const chainRecords =
-      chain !== undefined && (chain === "stellar" || chain in SUPPORTED_TOKENS)
-        ? this.repo.findByChain(chain)
-        : this.repo.findAll();
-    const stellarTokens = chainRecords.filter((record) => record.chain === "stellar");
-
-    if (chain === "stellar") {
-      return { tokens: stellarTokens.map((record) => this.toApiToken(record)), chain: "stellar" };
-    }
-    if (chain !== undefined && chain in SUPPORTED_TOKENS) {
-      return {
-        tokens: chainRecords
-          .filter((record) => record.chain === chain)
-          .map((record) => this.toApiToken(record)),
-        chain,
   /**
    * Return the supported token registry, optionally narrowed to one chain.
-   *
-   * - `chain="stellar"` → `{ tokens: StellarToken[], chain: "stellar" }`
-   * - `chain=<known>`   → `{ tokens: Token[], chain }`
-   * - omitted / unknown → `{ tokens: Record<chain, Token[]>, stellarTokens: Token[] }`
-   *
-   * An unrecognised chain deliberately falls back to the full registry rather
-   * than erroring: this endpoint feeds discovery UIs, and a client with a
-   * stale chain list should see everything, not a 4xx.
+   * Delisted tokens are hidden. Paused tokens stay visible.
    */
-  async getByChain(chain?: string) {
+  async getByChain(chain?: string): Promise<TokensByChainResponse> {
     const requested = chain?.toLowerCase();
 
     if (requested === "stellar") {
-      const records = await this.repo.findByChain("stellar");
-      return {
-        tokens: records.map((record) => this.toApiToken(record)),
-        chain: "stellar",
-      };
+      const records = this.listed(await Promise.resolve(this.repo.findByChain("stellar")));
+      return { tokens: records.map((record) => this.toApiToken(record)), chain: "stellar" };
     }
 
     if (requested && requested in SUPPORTED_TOKENS) {
-      const records = await this.repo.findByChain(requested);
+      const records = this.listed(await Promise.resolve(this.repo.findByChain(requested)));
       return {
-        tokens: records
-          .filter((record) => record.chain === requested)
-          .map((record) => this.toApiToken(record)),
+        tokens: records.filter((record) => record.chain === requested).map((record) => this.toApiToken(record)),
         chain: requested,
       };
     }
 
-    const all = await this.repo.findAll();
-
-    // Bucket by chain, pre-seeding a key for every chain the static registry
-    // declares so a chain with no rows still appears as an empty array rather
-    // than vanishing from the response shape.
-    const byChain: Record<string, ReturnType<TokensService["toApiToken"]>[]> = {};
-    for (const key of Object.keys(SUPPORTED_TOKENS)) {
-      byChain[key] = [];
-    }
+    const all = this.listed(await Promise.resolve(this.repo.findAll()));
+    const byChain: Record<string, ApiToken[]> = {};
+    for (const key of Object.keys(SUPPORTED_TOKENS)) byChain[key] = [];
     for (const record of all) {
       if (!byChain[record.chain]) byChain[record.chain] = [];
       byChain[record.chain].push(this.toApiToken(record));
     }
 
     return {
-      tokens: Object.fromEntries(
-        Object.entries(SUPPORTED_TOKENS).map(([key, _]) => [
-          key,
-          chainRecords
-            .filter((record) => record.chain === key)
-            .map((record) => this.toApiToken(record)),
-        ]),
-      ),
-      stellarTokens: stellarTokens.map((record) => this.toApiToken(record)),
-    };
-  }
-
-  getStellarTokens(): { tokens: StellarToken[] } {
-    const records = this.repo.findByChain("stellar");
       tokens: byChain,
-      stellarTokens: all
-        .filter((record) => record.chain === "stellar")
-        .map((record) => this.toApiToken(record)),
+      stellarTokens: all.filter((record) => record.chain === "stellar").map((record) => this.toApiToken(record)),
     };
   }
 
   async getStellarTokens(): Promise<{ tokens: StellarToken[] }> {
-    const records = await this.repo.findByChain("stellar");
+    const records = this.listed(await Promise.resolve(this.repo.findByChain("stellar")));
     return {
       tokens: records.map((record) => ({
         contract: record.address,
@@ -249,5 +173,16 @@ export class TokensService {
         priceUSD: record.priceUsd ?? 0,
       })),
     };
+  }
+
+  private listed(records: TokenRecord[]): TokenRecord[] {
+    return records.filter((record) => (record.status ?? "active") !== "delisted");
+  }
+
+  private assertOfferable(record: TokenRecord | undefined, address: string, chain: string): void {
+    const status = record?.status ?? "active";
+    if (record && status !== "active") {
+      throw new BadRequestException(`Token '${address}' on '${chain}' is ${status} and cannot be used for a new intent`);
+    }
   }
 }

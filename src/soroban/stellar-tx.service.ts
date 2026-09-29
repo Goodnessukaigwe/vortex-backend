@@ -38,7 +38,6 @@ import {
   SorobanDataBuilder,
   nativeToScVal,
   Networks,
-  Operation,
   SorobanRpc,
   Transaction,
   TransactionBuilder,
@@ -162,7 +161,7 @@ export class StellarTxService {
     private readonly confirmationService: TxConfirmationService,
     configService: ConfigService<AppConfig, true>,
     @Optional() private readonly metricsService?: MetricsService,
-    private readonly killSwitch: KillSwitchService,
+    @Optional() private readonly killSwitch?: KillSwitchService,
     @Optional() private readonly flags?: FeatureFlagService,
   ) {
     this.feePercentile = configService.get("stellar.feePercentile", { infer: true });
@@ -475,7 +474,7 @@ export class StellarTxService {
    */
   private assertOnChainWriteAllowed(method: string): void {
     try {
-      assertNotPaused(this.killSwitch, {
+      assertNotPaused(this.killSwitch!, {
         // Deliberately the protocol chain, not `stellar.network`. Switch scopes
         // are addressed with the chain an intent names ("stellar"); the network
         // ("testnet"/"mainnet") selects a Soroban endpoint and would never match
@@ -610,18 +609,14 @@ export class StellarTxService {
     })
       .addOperation(
         Operation.invokeHostFunction({
-          func: xdr.HostFunctionType.hostFunctionTypeInvokeContract,
-          args: [
-            contract.toScAddress(),
-            // The method name is a symbol in the Soroban ABI, not a string.
-            nativeToScVal(params.method, { type: "symbol" }),
-            params.args,
-            // Token the call is denominated in. `native` is XLM; the settlement
-            // contract's own token is a distinct `ScAddress` entry point. The
-            // value is irrelevant to a simulation, but it must be a well-formed
-            // ScVal for the envelope to decode.
-            nativeToScVal("native", { type: "symbol" }),
-          ],
+          func: xdr.HostFunction.hostFunctionTypeInvokeContract(
+            new xdr.InvokeContractArgs({
+              contractAddress: contract.toScAddress(),
+              functionName: Buffer.from(params.method),
+              args: [...params.args, nativeToScVal("native", { type: "symbol" })],
+            }),
+          ),
+          auth: [],
         }),
       )
       .setTimeout(this.simulationTimeoutSeconds)

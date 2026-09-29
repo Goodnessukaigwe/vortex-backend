@@ -164,11 +164,10 @@ export class TreasuryService {
       // Handle issued assets (traditional Stellar assets)
       const [code, issuer] = asset.split(":");
       if (issuer) {
-        const balance = account.balances.find(
-          (b) => b.asset_type !== "native" && 
-                 b.asset_code === code && 
-                 b.asset_issuer === issuer,
-        );
+        const balance = account.balances.find((b) => {
+          if (b.asset_type === "native" || b.asset_type === "liquidity_pool_shares") return false;
+          return b.asset_code === code && b.asset_issuer === issuer;
+        });
         return {
           asset,
           balance: balance ? this.parseBalance(balance.balance) : "0",

@@ -28,6 +28,7 @@ Commit message format is enforced via [commitlint](https://commitlint.js.org/) s
 ## [Unreleased]
 
 ### Added
+- Admin token registry (`POST`/`PATCH`/`DELETE /api/v1/admin/tokens`) verifies EVM and Stellar metadata on chain before persistence, soft-delists tokens, and emits `token_list_updated` (Closes #435)
 - `scripts/generate-client.ts` — generates a typed TypeScript API client from the live
   OpenAPI spec using `openapi-typescript` v7; output committed to `src/generated/`
   (Closes #134)

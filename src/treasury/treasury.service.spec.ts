@@ -6,7 +6,7 @@ import { SorobanService } from "../soroban/soroban.service";
 
 describe("TreasuryService", () => {
   let service: TreasuryService;
-  let prisma: jest.Mocked<PrismaService>;
+  let prisma: any;
   let soroban: jest.Mocked<SorobanService>;
   let configService: jest.Mocked<ConfigService>;
 
@@ -52,7 +52,7 @@ describe("TreasuryService", () => {
     }).compile();
 
     service = module.get<TreasuryService>(TreasuryService);
-    prisma = module.get(PrismaService) as jest.Mocked<PrismaService>;
+    prisma = module.get(PrismaService) as any;
     soroban = module.get(SorobanService) as jest.Mocked<SorobanService>;
     configService = module.get(ConfigService) as jest.Mocked<ConfigService>;
   });

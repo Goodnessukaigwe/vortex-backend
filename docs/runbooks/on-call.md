@@ -520,6 +520,8 @@ handlers never wait for Redis.
 | Variable | Default | Effect |
 |---|---|---|
 | `SOROBAN_RPC_URL` | `https://soroban-testnet.stellar.org` | Upstream Soroban JSON-RPC endpoint |
+| `EVM_RPC_URLS` | `{}` | JSON map of chain → JSON-RPC URL for admin ERC-20 verification |
+| `SHADOW_SOURCE_ACCOUNT` | empty | Envelope source for read-only SAC metadata simulation |
 | `STELLAR_NETWORK` | `testnet` | Network passphrase selection |
 | `PORT` | `4000` | HTTP + WS listen port |
 | `NODE_ENV` | `development` | Log verbosity (set to `production` in prod) |

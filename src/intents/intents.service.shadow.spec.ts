@@ -7,6 +7,7 @@ import { ShadowService, type ShadowObservationRequest } from "../soroban/shadow.
 import { StellarTxService } from "../soroban/stellar-tx.service";
 import { IntentsService } from "./intents.service";
 import { InMemoryIntentsRepository } from "./intents.repository";
+import { ProtocolParamsService } from "../governance/params.service";
 
 /**
  * Wiring tests for the shadow-mode divergence monitor at its real call sites
@@ -69,11 +70,21 @@ interface Harness {
 function makeService(options: { accepts?: boolean } = {}): Harness {
   const shadow = fakeShadowService(options.accepts ?? true);
   const metrics = fakeMetricsService();
+  const protocolParams = {
+    snapshotForChain: jest.fn().mockReturnValue({
+      version: 0,
+      feeBps: 30,
+      deadlineSeconds: 1800,
+      fillWindowSeconds: 600,
+      capturedAt: new Date().toISOString(),
+    }),
+  } as unknown as ProtocolParamsService;
   const service = new IntentsService(
     new InMemoryIntentsRepository(),
     fakeConfig(),
     fakeStellarTxService(),
     fakePrismaService(),
+    protocolParams,
     shadow as unknown as ShadowService,
     metrics,
   );

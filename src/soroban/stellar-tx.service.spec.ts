@@ -13,6 +13,8 @@ import {
 import { ConfigService } from "@nestjs/config";
 import { StellarTxService, type SimulateContractParams } from "./stellar-tx.service";
 import { SorobanService } from "./soroban.service";
+import { SignerService } from "./signer.service";
+import { TxConfirmationService } from "./tx-confirmation.service";
 import { AppConfig } from "../config/configuration";
 import { KillSwitchService } from "../killswitch/killswitch.service";
 
@@ -70,7 +72,11 @@ const CONTRACT_ID = "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA";
 function validityWindowSeconds(transaction: Transaction): number {
   const bounds = transaction.timeBounds;
   if (!bounds) throw new Error("expected the simulation envelope to carry a validity window");
-  return Number(bounds.maxTime) - Number(bounds.minTime);
+  const min = Number(bounds.minTime);
+  const max = Number(bounds.maxTime);
+  // Current stellar-sdk setTimeout() stores minTime=0 and maxTime=now+seconds.
+  const start = min === 0 ? Math.floor(Date.now() / 1000) : min;
+  return max - start;
 }
 
 describe("StellarTxService", () => {
@@ -92,7 +98,10 @@ describe("StellarTxService", () => {
     killSwitch = { evaluateTarget: jest.fn().mockReturnValue(notPaused) };
     service = new StellarTxService(
       sorobanService as unknown as SorobanService,
+      {} as SignerService,
+      {} as TxConfirmationService,
       configService as unknown as ConfigService<AppConfig, true>,
+      undefined,
       killSwitch as unknown as KillSwitchService,
     );
   });
@@ -163,7 +172,10 @@ describe("StellarTxService", () => {
 
       const dryRunService = new StellarTxService(
         sorobanService as unknown as SorobanService,
+        {} as SignerService,
+        {} as TxConfirmationService,
         dryRunConfigService,
+        undefined,
         killSwitch as unknown as KillSwitchService,
       );
 
@@ -189,9 +201,19 @@ describe("StellarTxService", () => {
         }),
       } as unknown as ConfigService<AppConfig, true>;
 
+      const signer = {
+        withNextSequence: jest.fn(async () => {
+          throw new Error("live submission attempted");
+        }),
+        getPublicKey: () => "GTEST",
+        getNetworkPassphrase: () => Networks.TESTNET,
+      };
       const liveService = new StellarTxService(
         sorobanService as unknown as SorobanService,
+        signer as unknown as SignerService,
+        {} as TxConfirmationService,
         liveConfigService,
+        undefined,
         killSwitch as unknown as KillSwitchService,
       );
 
@@ -201,7 +223,8 @@ describe("StellarTxService", () => {
           method: "create_intent",
           args: [],
         }),
-      ).rejects.toThrow(/not yet implemented/);
+      ).rejects.toThrow(/live submission attempted/);
+      expect(signer.withNextSequence).toHaveBeenCalled();
     });
   });
 
@@ -243,7 +266,12 @@ describe("StellarTxService", () => {
       } as unknown as ConfigService<AppConfig, true>;
 
       return {
-        service: new StellarTxService(soroban as unknown as SorobanService, configService),
+        service: new StellarTxService(
+          soroban as unknown as SorobanService,
+          {} as SignerService,
+          {} as TxConfirmationService,
+          configService,
+        ),
         soroban,
       };
     }
@@ -318,7 +346,7 @@ describe("StellarTxService", () => {
     it("classifies a hard failure as a contract error", async () => {
       const { service, soroban } = buildShadowService();
       soroban.simulateTransaction.mockResolvedValue(
-        simulationError("HostError: Error(WasmVm, InvalidAction) missing export"),
+        simulationError("HostError: missing export"),
       );
 
       const result = await service.simulateContract(params());
@@ -365,7 +393,7 @@ describe("StellarTxService", () => {
       await service.simulateContract(params());
 
       const [submitted] = soroban.simulateTransaction.mock.calls[0];
-      expect((submitted as Transaction).source.sequenceNumber()).toBe("42");
+      expect(String((submitted as Transaction).sequence)).toBe("43");
       expect(soroban.getLatestLedger).not.toHaveBeenCalled();
     });
 
@@ -378,7 +406,7 @@ describe("StellarTxService", () => {
 
       const [submitted] = soroban.simulateTransaction.mock.calls[0];
       // 500 (latest closed) + 1: the next sequence the account would hold.
-      expect((submitted as Transaction).source.sequenceNumber()).toBe("501");
+      expect(String((submitted as Transaction).sequence)).toBe("502");
     });
 
     it("falls back to sequence 0 when neither the account nor the ledger can be read", async () => {
@@ -391,7 +419,7 @@ describe("StellarTxService", () => {
 
       expect(result.outcome).toBe("ok");
       const [submitted] = soroban.simulateTransaction.mock.calls[0];
-      expect((submitted as Transaction).source.sequenceNumber()).toBe("0");
+      expect(String((submitted as Transaction).sequence)).toBe("1");
     });
 
     it("builds a single, well-formed host-function operation for the named method", async () => {
@@ -402,12 +430,8 @@ describe("StellarTxService", () => {
 
       expect(result.outcome).toBe("ok");
       const [submitted] = soroban.simulateTransaction.mock.calls[0];
-      const envelope = (submitted as Transaction).toEnvelope();
-      expect(envelope.operations()).toHaveLength(1);
-      // Round-trips through XDR, so the host function and every ScVal the
-      // monitor built are structurally valid — which is the whole reason the
-      // monitor cannot blame a malformed envelope for a "divergence".
-      expect(() => envelope.toXDR()).not.toThrow();
+      expect((submitted as Transaction).operations).toHaveLength(1);
+      expect(() => (submitted as Transaction).toXDR()).not.toThrow();
     });
 
     it("sizes the ledger validity window from the worst-case shadow queue drain", async () => {

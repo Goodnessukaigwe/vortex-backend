@@ -35,8 +35,12 @@ export class SorobanService {
    * `closeTime` here is what makes `vortex_event_ingestion_lag_seconds` a real
    * measurement rather than a guess.
    */
-  getLedger(sequence: number) {
-    return this.server.getLedger(sequence);
+  getLedger(sequence: number): Promise<{ header?: { closeTime?: string | number } }> {
+    return (
+      this.server as unknown as {
+        getLedger: (seq: number) => Promise<{ header?: { closeTime?: string | number } }>;
+      }
+    ).getLedger(sequence);
   }
 
   getEvents(request: SorobanRpc.Server.GetEventsRequest) {
