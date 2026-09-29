@@ -4,6 +4,7 @@ import { IntentsService } from "./intents.service";
 import { IntentsController } from "./intents.controller";
 import { IntentsGateway } from "./intents.gateway";
 import { IntentsSweeperService } from "./intents-sweeper.service";
+import { IntentDeadlineScheduler } from "./intents-deadline.jobs";
 import { IntentsMaintenanceJobs } from "./intents-maintenance.jobs";
 import { INTENTS_REPOSITORY, InMemoryIntentsRepository } from "./intents.repository";
 import { PrismaIntentsRepository } from "./prisma-intents.repository";
@@ -25,13 +26,7 @@ import { GovernanceModule } from "../governance/governance.module";
   // SorobanModule through HealthModule before IntentsModule has finished).
   // `forwardRef` on the SorobanModule import mirrors the one in SorobanModule:
   // the two modules need each other (ShadowService here, IntentsService there).
-  imports: [
-    forwardRef(() => SolversModule),
-    RoutingModule,
-    TokensModule,
-    forwardRef(() => SorobanModule),
-  ],
-  imports: [forwardRef(() => SolversModule), RoutingModule, TokensModule, SorobanModule, GovernanceModule],
+  imports: [forwardRef(() => SolversModule), RoutingModule, TokensModule, forwardRef(() => SorobanModule), GovernanceModule],
   controllers: [IntentsController],
   providers: [
     // Select the persistence adapter based on INTENTS_PERSISTENCE env var.
@@ -54,6 +49,7 @@ import { GovernanceModule } from "../governance/governance.module";
     IntentsGateway,
     backplaneHealthIndicator,
     IntentsSweeperService,
+    IntentDeadlineScheduler,
     IntentsMaintenanceJobs,
     // Note: EventIngestionService is provided by SorobanModule (imported above)
     // and exported from there — no re-declaration needed here.

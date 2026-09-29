@@ -1,6 +1,5 @@
 import { BadRequestException, Inject, Injectable } from "@nestjs/common";
 import { SUPPORTED_TOKENS, StellarToken } from "./tokens.data";
-import { SUPPORTED_TOKENS, STELLAR_TOKENS, StellarToken } from "./tokens.data";
 import { SupportedChain } from "../intents/intents.types";
 import { ITokensRepository, TOKENS_REPOSITORY, TokenRecord } from "./tokens.repository";
 
@@ -135,15 +134,6 @@ export class TokensService {
   }
 
   private toApiToken(record: TokenRecord): ApiToken {
-  /**
-   * Normalise a stored {@link TokenRecord} into the public token shape.
-   *
-   * Both `address` and `contract` are emitted with the same value so clients
-   * can read either field regardless of whether the token is EVM- or
-   * Stellar-native — the registry stores every token under `address`, but the
-   * Stellar side of the API has always used `contract`.
-   */
-  private toApiToken(record: TokenRecord) {
     return {
       address: record.address,
       contract: record.address,
@@ -154,22 +144,6 @@ export class TokensService {
     };
   }
 
-  getByChain(chain?: string): TokensByChainResponse {
-    const chainRecords =
-      chain !== undefined && (chain === "stellar" || chain in SUPPORTED_TOKENS)
-        ? this.repo.findByChain(chain)
-        : this.repo.findAll();
-    const stellarTokens = chainRecords.filter((record) => record.chain === "stellar");
-
-    if (chain === "stellar") {
-      return { tokens: stellarTokens.map((record) => this.toApiToken(record)), chain: "stellar" };
-    }
-    if (chain !== undefined && chain in SUPPORTED_TOKENS) {
-      return {
-        tokens: chainRecords
-          .filter((record) => record.chain === chain)
-          .map((record) => this.toApiToken(record)),
-        chain,
   /**
    * Return the supported token registry, optionally narrowed to one chain.
    *
@@ -181,7 +155,7 @@ export class TokensService {
    * than erroring: this endpoint feeds discovery UIs, and a client with a
    * stale chain list should see everything, not a 4xx.
    */
-  async getByChain(chain?: string) {
+  async getByChain(chain?: string): Promise<TokensByChainResponse> {
     const requested = chain?.toLowerCase();
 
     if (requested === "stellar") {
@@ -204,10 +178,7 @@ export class TokensService {
 
     const all = await this.repo.findAll();
 
-    // Bucket by chain, pre-seeding a key for every chain the static registry
-    // declares so a chain with no rows still appears as an empty array rather
-    // than vanishing from the response shape.
-    const byChain: Record<string, ReturnType<TokensService["toApiToken"]>[]> = {};
+    const byChain: Record<string, ApiToken[]> = {};
     for (const key of Object.keys(SUPPORTED_TOKENS)) {
       byChain[key] = [];
     }
@@ -217,20 +188,6 @@ export class TokensService {
     }
 
     return {
-      tokens: Object.fromEntries(
-        Object.entries(SUPPORTED_TOKENS).map(([key, _]) => [
-          key,
-          chainRecords
-            .filter((record) => record.chain === key)
-            .map((record) => this.toApiToken(record)),
-        ]),
-      ),
-      stellarTokens: stellarTokens.map((record) => this.toApiToken(record)),
-    };
-  }
-
-  getStellarTokens(): { tokens: StellarToken[] } {
-    const records = this.repo.findByChain("stellar");
       tokens: byChain,
       stellarTokens: all
         .filter((record) => record.chain === "stellar")

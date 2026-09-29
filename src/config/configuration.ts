@@ -281,6 +281,19 @@ export interface AppConfig {
     /** Soroban RPC endpoints probed for quorum (majority must be healthy). */
     rpcHealthUrls: string[];
   };
+  /** Low-frequency sweeper that catches deadline jobs the queue did not run. */
+  safetySweepIntervalMs: number;
+  /** Public anonymised datasets (RFC 0001). Present so DatasetsModule typechecks. */
+  datasets: {
+    enabled: boolean;
+    anonymize: boolean;
+    salt: string;
+    saltRotationHours: number;
+    saltRetentionWindows: number;
+    publicBucket: string;
+    storageKind: "local" | "memory";
+    localDir: string;
+  };
 }
 
 export default (): AppConfig => ({
@@ -394,6 +407,17 @@ export default (): AppConfig => ({
       .split(",")
       .map((u) => u.trim())
       .filter(Boolean),
+  },
+  safetySweepIntervalMs: parseInt(process.env.SAFETY_SWEEP_INTERVAL_MS ?? "300000", 10),
+  datasets: {
+    enabled: (process.env.DATASETS_ENABLED ?? "false") === "true",
+    anonymize: (process.env.DATASETS_ANONYMIZE ?? "true") !== "false",
+    salt: process.env.DATASETS_SALT ?? "",
+    saltRotationHours: parseInt(process.env.DATASETS_SALT_ROTATION_HOURS ?? "24", 10),
+    saltRetentionWindows: parseInt(process.env.DATASETS_SALT_RETENTION_WINDOWS ?? "2", 10),
+    publicBucket: process.env.DATASETS_PUBLIC_BUCKET ?? "vortex-public-datasets",
+    storageKind: (process.env.DATASETS_STORAGE_KIND ?? "memory") as "local" | "memory",
+    localDir: process.env.DATASETS_LOCAL_DIR ?? "./data/datasets",
   },
 });
 

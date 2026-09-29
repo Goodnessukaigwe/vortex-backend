@@ -1,4 +1,4 @@
-import type { WebSocket } from "ws";
+import { WebSocket } from "ws";
 
 /** Classic token bucket: `ratePerSec` sustained, up to `burst` at once. */
 export class TokenBucket {
@@ -83,8 +83,8 @@ export class ConnectionState {
   }
 
   send(payload: string): OutboundResult {
-    if (this.closed || this.socket.readyState !== this.socket.OPEN) return "sent";
-    if (this.queue.length === 0 && this.socket.bufferedAmount < this.limits.bufferBytes) {
+    if (this.closed || this.socket.readyState !== WebSocket.OPEN) return "sent";
+    if (this.queue.length === 0 && this.bufferedAmount() < this.limits.bufferBytes) {
       this.write(payload);
       return "sent";
     }
@@ -104,6 +104,12 @@ export class ConnectionState {
     this.queue.length = 0;
   }
 
+  /** `bufferedAmount` is 0 until the socket reports bytes waiting in the kernel buffer. */
+  private bufferedAmount(): number {
+    const buffered = this.socket.bufferedAmount;
+    return typeof buffered === "number" ? buffered : 0;
+  }
+
   private write(payload: string) {
     this.socket.send(payload, () => this.flush());
   }
@@ -112,8 +118,8 @@ export class ConnectionState {
     while (
       !this.closed &&
       this.queue.length > 0 &&
-      this.socket.readyState === this.socket.OPEN &&
-      this.socket.bufferedAmount < this.limits.bufferBytes
+      this.socket.readyState === WebSocket.OPEN &&
+      this.bufferedAmount() < this.limits.bufferBytes
     ) {
       this.write(this.queue.shift()!);
     }

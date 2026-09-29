@@ -76,6 +76,8 @@ export class MetricsService implements OnModuleInit {
    */
   public readonly sweeperExpiredTotal: client.Counter<string>;
   public readonly sweeperSweepDurationMs: client.Histogram<string>;
+  /** Intents the low-frequency safety sweep expired or slashed. Steady state is ~0. */
+  public readonly sweeperSafetyCaughtTotal: client.Counter<string>;
 
   // ── SLO SLIs (issue #480) ─────────────────────────────────────────────────
   public readonly txConfirmationDuration: client.Histogram<string>;
@@ -152,6 +154,12 @@ export class MetricsService implements OnModuleInit {
       name: `${prefix}sweeper_sweep_duration_ms`,
       help: "Duration of each IntentsSweeperService.sweep() execution in milliseconds",
       buckets: [1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000],
+      registers: [this.register],
+    });
+
+    this.sweeperSafetyCaughtTotal = new client.Counter({
+      name: `${prefix}sweeper_safety_caught_total`,
+      help: "Intents expired or slashed by the low-frequency safety sweep (lost deadline jobs). Should stay near zero.",
       registers: [this.register],
     });
 
@@ -425,6 +433,11 @@ export class MetricsService implements OnModuleInit {
   recordSweep(expiredCount: number, durationMs: number): void {
     this.sweeperExpiredTotal.inc(expiredCount);
     this.sweeperSweepDurationMs.observe(durationMs);
+  }
+
+  /** Items the safety sweep had to settle because a deadline job did not. */
+  recordSafetyCatch(count: number): void {
+    if (count > 0) this.sweeperSafetyCaughtTotal.inc(count);
   }
 
   /**

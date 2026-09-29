@@ -24,6 +24,7 @@ import { MetricsService } from "../metrics/metrics.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { ProtocolParamsService } from "../governance/params.service";
 import { FeatureFlagService } from "../flags/feature-flag.service";
+import { IntentDeadlineScheduler } from "./intents-deadline.jobs";
 
 const TERMINAL_STATES: IntentState[] = ["filled", "cancelled", "expired", "slashed"];
 
@@ -109,6 +110,7 @@ export class IntentsService {
     private readonly configService: ConfigService<AppConfig, true>,
     private readonly stellarTxService: StellarTxService,
     private readonly prisma: PrismaService,
+    private readonly protocolParamsService: ProtocolParamsService,
     /**
      * Shadow-mode divergence monitor (issue #401).
      *
@@ -128,8 +130,8 @@ export class IntentsService {
      * this is always present.
      */
     @Optional() private readonly metricsService?: MetricsService,
-    private readonly protocolParamsService: ProtocolParamsService,
     @Optional() private readonly flags?: FeatureFlagService,
+    @Optional() private readonly deadlines?: IntentDeadlineScheduler,
   ) {}
 
   /**
@@ -267,6 +269,7 @@ export class IntentsService {
     }
 
     await this.repo.save(intent);
+    this.deadlines?.scheduleExpire(intent);
     // Creation is the entry edge of the funnel: the `vortex:intent:*` recording
     // rules count transitions *into* each state, so without this the intent
     // dashboard would start every conversion ratio from zero. `from_state` is
@@ -513,7 +516,10 @@ export class IntentsService {
     const fillWindow =
       CHAIN_FILL_WINDOW_DEFAULTS[intent.srcChain] ?? DEFAULT_FILL_WINDOW_SECONDS;
     const updated = await this.repo.acceptIfOpen(id, solver, nowSec + fillWindow, nowSec);
-    if (updated !== null) this.countTransition("open", "accepted");
+    if (updated !== null) {
+      this.countTransition("open", "accepted");
+      this.deadlines?.scheduleFillWindow(updated);
+    }
     if (this.beginShadowObservation()) {
       this.observeAccept(updated ?? intent, solver, updated !== null);
     }
@@ -533,9 +539,6 @@ export class IntentsService {
         nativeToScVal(intent.deadline, { type: "u64" }),
       ]),
     );
-    const snapshot = this.protocolParamsService.snapshotForChain(intent.srcChain);
-    const fillWindow = snapshot.fillWindowSeconds;
-    return this.repo.acceptIfOpen(id, solver, nowSec + fillWindow, nowSec);
   }
 
   /**
@@ -654,6 +657,7 @@ export class IntentsService {
       // corrupt, so skip the simulation rather than encoding a null address —
       // the sweep loop already logs that case loudly.
       if (subject?.solver) {
+        const solver = subject.solver;
         this.reportShadow(
           "slash",
           subject.intentId,
@@ -661,9 +665,9 @@ export class IntentsService {
           "slash_intent",
           this.safeArgs(() => [
             nativeToScVal(subject.intentId, { type: "string" }),
-            new Address(subject.solver).toScVal(),
-            nativeToScVal(patch.slashReason, { type: "string" }),
-            nativeToScVal(patch.slashedAt, { type: "u64" }),
+            new Address(solver).toScVal(),
+            nativeToScVal(patch.slashReason ?? "", { type: "string" }),
+            nativeToScVal(patch.slashedAt ?? 0, { type: "u64" }),
           ]),
         );
       }
@@ -678,7 +682,9 @@ export class IntentsService {
    * or already has a later deadline.
    */
   async extendDeadlineIfAccepted(id: string, newDeadline: number): Promise<Intent | null> {
-    return this.repo.extendDeadlineIfAccepted(id, newDeadline);
+    const updated = await this.repo.extendDeadlineIfAccepted(id, newDeadline);
+    if (updated) this.deadlines?.scheduleFillWindow(updated);
+    return updated;
   }
 
   // ---------------------------------------------------------------------------
