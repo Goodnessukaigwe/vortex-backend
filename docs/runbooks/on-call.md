@@ -532,6 +532,10 @@ handlers never wait for Redis.
 | `ADMIN_API_KEYS` | empty (admin APIs disabled) | `id:role:secret` entries for admin / superadmin endpoints |
 | `PROCESS_ROLE` / `JOBS_DRIVER` | `all` / `memory` | Where job workers run; `bullmq` for multi-instance |
 | `CANARY_ADDRESSES` | empty | Canary accounts excluded from public stats |
+| `MAX_USER_SLIPPAGE_BPS` | `100` | Reject intent create when `minDstAmount` is more than this many bps below oracle fair value unless the user signs `acknowledgeHighSlippage` |
+| `MAX_PREMIUM_BPS` | `50` | Reject intent create when `minDstAmount` is more than this many bps above oracle fair value |
+| `ORACLE_FAIL_OPEN_MAX_USD` | `100` | Missing/stale oracle: fail-open at or below this source notional (USD); fail-closed above it |
+| `ORACLE_MAX_STALENESS_MS` | `60000` | Snapshots older than this are treated as unavailable |
 
 ---
 

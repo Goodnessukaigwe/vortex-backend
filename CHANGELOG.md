@@ -28,6 +28,12 @@ Commit message format is enforced via [commitlint](https://commitlint.js.org/) s
 ## [Unreleased]
 
 ### Added
+- Oracle-referenced `minDstAmount` validation on intent create: fair destination
+  value from the aggregator, rejection of slippage above `MAX_USER_SLIPPAGE_BPS`
+  unless the user signs `acknowledgeHighSlippage`, rejection of premium above
+  `MAX_PREMIUM_BPS`, and fail-open/fail-closed oracle policy
+  (Closes #434)
+
 - `scripts/generate-client.ts` — generates a typed TypeScript API client from the live
   OpenAPI spec using `openapi-typescript` v7; output committed to `src/generated/`
   (Closes #134)

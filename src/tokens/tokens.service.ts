@@ -1,6 +1,5 @@
 import { BadRequestException, Inject, Injectable } from "@nestjs/common";
 import { SUPPORTED_TOKENS, StellarToken } from "./tokens.data";
-import { SUPPORTED_TOKENS, STELLAR_TOKENS, StellarToken } from "./tokens.data";
 import { SupportedChain } from "../intents/intents.types";
 import { ITokensRepository, TOKENS_REPOSITORY, TokenRecord } from "./tokens.repository";
 
@@ -62,12 +61,9 @@ export class TokensService {
    *
    * Returns `undefined` when no match is found — callers decide how to handle
    * the "unknown token" case (e.g. fall back to a default priceUSD).
-   *
-   * @param chain   The source chain (stellar | ethereum | base | …)
-   * @param address Token contract/address string
    */
   async resolveSrcToken(chain: SupportedChain, address: string): Promise<ResolvedSrcToken | undefined> {
-    const token = await this.repo.findByAddressAndChain(address, chain);
+    const token = await Promise.resolve(this.repo.findByAddressAndChain(address, chain));
     if (!token) return undefined;
     return {
       kind: "src",
@@ -82,11 +78,9 @@ export class TokensService {
 
   /**
    * Look up a Stellar destination token by contract ID.
-   *
-   * Returns `undefined` when no match is found.
    */
   async resolveDstToken(contract: string): Promise<ResolvedDstToken | undefined> {
-    const token = await this.repo.findByAddressAndChain(contract, "stellar");
+    const token = await Promise.resolve(this.repo.findByAddressAndChain(contract, "stellar"));
     if (!token) return undefined;
     return {
       kind: "dst",
@@ -102,14 +96,8 @@ export class TokensService {
    * Like {@link resolveSrcToken} but throws a `BadRequestException` instead of
    * returning `undefined` when the chain + address does not resolve to a token
    * in the configured registry (issue #276).
-   *
-   * Use this on the write path (intent creation) where an unrecognised token
-   * must be rejected outright rather than silently stored with no priceUSD.
    */
-  async resolveSrcTokenOrThrow(
-    chain: SupportedChain,
-    address: string,
-  ): Promise<ResolvedSrcToken> {
+  async resolveSrcTokenOrThrow(chain: SupportedChain, address: string): Promise<ResolvedSrcToken> {
     const token = await this.resolveSrcToken(chain, address);
     if (!token) {
       throw new BadRequestException(
@@ -134,7 +122,6 @@ export class TokensService {
     return token;
   }
 
-  private toApiToken(record: TokenRecord): ApiToken {
   /**
    * Normalise a stored {@link TokenRecord} into the public token shape.
    *
@@ -143,7 +130,7 @@ export class TokensService {
    * Stellar-native — the registry stores every token under `address`, but the
    * Stellar side of the API has always used `contract`.
    */
-  private toApiToken(record: TokenRecord) {
+  private toApiToken(record: TokenRecord): ApiToken {
     return {
       address: record.address,
       contract: record.address,
@@ -154,38 +141,18 @@ export class TokensService {
     };
   }
 
-  getByChain(chain?: string): TokensByChainResponse {
-    const chainRecords =
-      chain !== undefined && (chain === "stellar" || chain in SUPPORTED_TOKENS)
-        ? this.repo.findByChain(chain)
-        : this.repo.findAll();
-    const stellarTokens = chainRecords.filter((record) => record.chain === "stellar");
-
-    if (chain === "stellar") {
-      return { tokens: stellarTokens.map((record) => this.toApiToken(record)), chain: "stellar" };
-    }
-    if (chain !== undefined && chain in SUPPORTED_TOKENS) {
-      return {
-        tokens: chainRecords
-          .filter((record) => record.chain === chain)
-          .map((record) => this.toApiToken(record)),
-        chain,
   /**
    * Return the supported token registry, optionally narrowed to one chain.
    *
    * - `chain="stellar"` → `{ tokens: StellarToken[], chain: "stellar" }`
    * - `chain=<known>`   → `{ tokens: Token[], chain }`
    * - omitted / unknown → `{ tokens: Record<chain, Token[]>, stellarTokens: Token[] }`
-   *
-   * An unrecognised chain deliberately falls back to the full registry rather
-   * than erroring: this endpoint feeds discovery UIs, and a client with a
-   * stale chain list should see everything, not a 4xx.
    */
-  async getByChain(chain?: string) {
+  async getByChain(chain?: string): Promise<TokensByChainResponse> {
     const requested = chain?.toLowerCase();
 
     if (requested === "stellar") {
-      const records = await this.repo.findByChain("stellar");
+      const records = await Promise.resolve(this.repo.findByChain("stellar"));
       return {
         tokens: records.map((record) => this.toApiToken(record)),
         chain: "stellar",
@@ -193,21 +160,15 @@ export class TokensService {
     }
 
     if (requested && requested in SUPPORTED_TOKENS) {
-      const records = await this.repo.findByChain(requested);
+      const records = await Promise.resolve(this.repo.findByChain(requested));
       return {
-        tokens: records
-          .filter((record) => record.chain === requested)
-          .map((record) => this.toApiToken(record)),
+        tokens: records.filter((record) => record.chain === requested).map((record) => this.toApiToken(record)),
         chain: requested,
       };
     }
 
-    const all = await this.repo.findAll();
-
-    // Bucket by chain, pre-seeding a key for every chain the static registry
-    // declares so a chain with no rows still appears as an empty array rather
-    // than vanishing from the response shape.
-    const byChain: Record<string, ReturnType<TokensService["toApiToken"]>[]> = {};
+    const all = await Promise.resolve(this.repo.findAll());
+    const byChain: Record<string, ApiToken[]> = {};
     for (const key of Object.keys(SUPPORTED_TOKENS)) {
       byChain[key] = [];
     }
@@ -217,29 +178,13 @@ export class TokensService {
     }
 
     return {
-      tokens: Object.fromEntries(
-        Object.entries(SUPPORTED_TOKENS).map(([key, _]) => [
-          key,
-          chainRecords
-            .filter((record) => record.chain === key)
-            .map((record) => this.toApiToken(record)),
-        ]),
-      ),
-      stellarTokens: stellarTokens.map((record) => this.toApiToken(record)),
-    };
-  }
-
-  getStellarTokens(): { tokens: StellarToken[] } {
-    const records = this.repo.findByChain("stellar");
       tokens: byChain,
-      stellarTokens: all
-        .filter((record) => record.chain === "stellar")
-        .map((record) => this.toApiToken(record)),
+      stellarTokens: all.filter((record) => record.chain === "stellar").map((record) => this.toApiToken(record)),
     };
   }
 
   async getStellarTokens(): Promise<{ tokens: StellarToken[] }> {
-    const records = await this.repo.findByChain("stellar");
+    const records = await Promise.resolve(this.repo.findByChain("stellar"));
     return {
       tokens: records.map((record) => ({
         contract: record.address,

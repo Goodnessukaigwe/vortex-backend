@@ -26,7 +26,7 @@ const validCreateBody = {
   dstTokenContract: "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
   dstTokenSymbol: "USDC",
   dstTokenDecimals: 7,
-  minDstAmount: "990000",
+  minDstAmount: "9900000",
 };
 
 describe("Concurrent accept / fill race load test", () => {
@@ -97,7 +97,7 @@ describe("Concurrent accept / fill race load test", () => {
           .post(`/api/v1/intents/${intentId}/fill`)
           .send({
             solver: kp.publicKey(),
-            fillAmount: "995000",
+            fillAmount: "9950000",
             txHash: `tx-${Math.random()}`,
             signature: sign(kp, buildFillMessage(intentId, kp.publicKey())),
           }),
@@ -115,7 +115,7 @@ describe("Concurrent accept / fill race load test", () => {
     const intent = (await request(app.getHttpServer()).get(`/api/v1/intents/${intentId}`).expect(200))
       .body;
     expect(intent.state).toBe("filled");
-    expect(intent.fillAmount).toBe("995000");
+    expect(intent.fillAmount).toBe("9950000");
   });
 
   it("mixed solvers racing for different intents all resolve with at most one winner each", async () => {
@@ -169,7 +169,7 @@ describe("Concurrent accept / fill race load test", () => {
 
     const results = Array.from({ length: 50 }, () =>
       repo.fillIfAccepted(open.intentId, "SOLVER_X", {
-        fillAmount: "995000",
+        fillAmount: "9950000",
         txHash: "race-hash",
         filledAt: Math.floor(Date.now() / 1000),
       }),
@@ -201,7 +201,7 @@ describe("Concurrent accept / fill race load test", () => {
     const late = await repo.fillIfAccepted(
       open.intentId,
       "SOLVER_X",
-      { fillAmount: "995000", txHash: "late", filledAt: now + 60 },
+      { fillAmount: "9950000", txHash: "late", filledAt: now + 60 },
       now + 60,
     );
     expect(late).toBeNull();

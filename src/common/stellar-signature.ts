@@ -100,6 +100,9 @@ export function buildDisputeReviewMessage(disputeId: string): string {
  */
 export function buildDisputeDecisionMessage(disputeId: string, resolution: string, reason: string): string {
   return `dispute-decision:${disputeId}:${resolution}:${reason}`;
+}
+
+/**
  * Build the canonical message that a solver must sign to update their mutable
  * profile fields (name / supportedChains / supportedTokens / avgFillTime).
  *
@@ -109,4 +112,17 @@ export function buildDisputeDecisionMessage(disputeId: string, resolution: strin
  */
 export function buildUpdateSolverMessage(address: string): string {
   return `update-solver:${address}`;
+}
+
+/**
+ * Canonical message a user must sign to acknowledge high slippage on create
+ * (issue #434). Bound to user + amounts so the signature cannot be reused
+ * for a different minDstAmount.
+ */
+export function buildHighSlippageAckMessage(
+  user: string,
+  srcAmount: string,
+  minDstAmount: string,
+): string {
+  return `acknowledge-high-slippage:${user}:${srcAmount}:${minDstAmount}`;
 }

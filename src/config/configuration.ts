@@ -266,6 +266,18 @@ export interface AppConfig {
   };
   /** HS256 secret for solver JWTs (SEP-10 auth, #442); empty disables JWT auth. */
   authJwtSecret: string;
+  /**
+   * Oracle-referenced minDstAmount gates (issue #434).
+   *
+   * Slippage/premium are integer basis points. `failOpenMaxUsd` is whole USD
+   * converted to 8-decimal scaled units at the validation boundary.
+   */
+  oracle: {
+    maxUserSlippageBps: number;
+    maxPremiumBps: number;
+    failOpenMaxUsd: number;
+    maxStalenessMs: number;
+  };
   /** Health probes (issue #492). */
   health: {
     /** Roles this process serves; readiness requires every indicator critical to any of them. */
@@ -280,6 +292,17 @@ export interface AppConfig {
     eventLoopMaxLagMs: number;
     /** Soroban RPC endpoints probed for quorum (majority must be healthy). */
     rpcHealthUrls: string[];
+  };
+  /** Public anonymised datasets (RFC 0001). */
+  datasets: {
+    enabled: boolean;
+    anonymize: boolean;
+    salt: string;
+    saltRotationHours: number;
+    saltRetentionWindows: number;
+    publicBucket: string;
+    storageKind: "local" | "memory";
+    localDir: string;
   };
 }
 
@@ -381,6 +404,12 @@ export default (): AppConfig => ({
     slowConsumerPolicy: (process.env.WS_SLOW_CONSUMER_POLICY ?? "drop_oldest") as AppConfig["ws"]["slowConsumerPolicy"],
   },
   authJwtSecret: process.env.AUTH_JWT_SECRET ?? "",
+  oracle: {
+    maxUserSlippageBps: parseInt(process.env.MAX_USER_SLIPPAGE_BPS ?? "100", 10),
+    maxPremiumBps: parseInt(process.env.MAX_PREMIUM_BPS ?? "50", 10),
+    failOpenMaxUsd: Number(process.env.ORACLE_FAIL_OPEN_MAX_USD ?? "100"),
+    maxStalenessMs: parseInt(process.env.ORACLE_MAX_STALENESS_MS ?? "60000", 10),
+  },
   health: {
     roles: (process.env.SERVICE_ROLES ?? "api,ws,worker")
       .split(",")
@@ -394,6 +423,16 @@ export default (): AppConfig => ({
       .split(",")
       .map((u) => u.trim())
       .filter(Boolean),
+  },
+  datasets: {
+    enabled: (process.env.DATASETS_ENABLED ?? "false") === "true",
+    anonymize: (process.env.DATASETS_ANONYMIZE ?? "true") !== "false",
+    salt: process.env.DATASETS_SALT ?? "",
+    saltRotationHours: parseInt(process.env.DATASETS_SALT_ROTATION_HOURS ?? "24", 10),
+    saltRetentionWindows: parseInt(process.env.DATASETS_SALT_RETENTION_WINDOWS ?? "2", 10),
+    publicBucket: process.env.DATASETS_PUBLIC_BUCKET ?? "vortex-public-datasets",
+    storageKind: (process.env.DATASETS_STORAGE_KIND ?? "memory") as "local" | "memory",
+    localDir: process.env.DATASETS_LOCAL_DIR ?? "./data/datasets",
   },
 });
 

@@ -28,7 +28,7 @@ const BASE_INTENT = {
   dstTokenContract: "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
   dstTokenSymbol: "USDC",
   dstTokenDecimals: 7,
-  minDstAmount: "490000",
+  minDstAmount: "4950000",
 };
 
 /** Helper — open a WS client and collect messages until the timeout. */

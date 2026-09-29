@@ -22,7 +22,7 @@ const validCreateBody = {
   dstTokenContract: "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
   dstTokenSymbol: "USDC",
   dstTokenDecimals: 7,
-  minDstAmount: "990000",
+  minDstAmount: "9900000",
 };
 
 describe("Concurrent idempotent create race load test", () => {
@@ -30,6 +30,7 @@ describe("Concurrent idempotent create race load test", () => {
 
   beforeAll(async () => {
     app = await createTestApp();
+    await app.listen(0);
   });
 
   afterAll(async () => {
@@ -67,12 +68,14 @@ describe("Concurrent idempotent create race load test", () => {
 
   it("still creates distinct intents for concurrent calls with different keys", async () => {
     const concurrency = 10;
+    // A fresh user: the previous case spends the per-user create budget.
+    const user = "GRACETESTUSER7654321";
 
     const results = await Promise.all(
       Array.from({ length: concurrency }, () =>
         request(app.getHttpServer())
           .post("/api/v1/intents")
-          .send({ ...validCreateBody, idempotencyKey: randomUUID() })
+          .send({ ...validCreateBody, user, idempotencyKey: randomUUID() })
           .expect(201),
       ),
     );

@@ -26,6 +26,8 @@ export const envValidationSchema = Joi.object({
 
   STELLAR_NETWORK: Joi.string().valid("testnet", "futurenet", "mainnet").default("testnet"),
   SOROBAN_RPC_URL: Joi.string().uri().default("https://soroban-testnet.stellar.org"),
+  HORIZON_URL: Joi.string().uri().default("https://horizon-testnet.stellar.org"),
+  TREASURY_ADDRESS: Joi.string().allow("").default(""),
   SETTLEMENT_CONTRACT_ID: Joi.string().allow("").default(""),
   SOLVER_REGISTRY_CONTRACT_ID: Joi.string().allow("").default(""),
   STELLAR_SIGNER_SECRET_KEY: Joi.string().allow("").default(""),
@@ -348,7 +350,23 @@ export const envValidationSchema = Joi.object({
   SOROBAN_RPC_ALLOWLIST: Joi.string().allow("").default(""),
   WEBHOOK_ALLOWLIST: Joi.string().allow("").default(""),
   ORACLE_ALLOWLIST: Joi.string().allow("").default(""),
-});
+
+  // ── Oracle minDstAmount validation (issue #434) ───────────────────────────
+  MAX_USER_SLIPPAGE_BPS: Joi.number().integer().min(0).max(10_000).default(100),
+  MAX_PREMIUM_BPS: Joi.number().integer().min(0).max(10_000).default(50),
+  ORACLE_FAIL_OPEN_MAX_USD: Joi.number().min(0).default(100),
+  ORACLE_MAX_STALENESS_MS: Joi.number().integer().min(0).default(60_000),
+
+  // ── Public anonymised datasets (RFC 0001) ────────────────────────────────
+  DATASETS_ENABLED: Joi.boolean().default(false),
+  DATASETS_ANONYMIZE: Joi.boolean().default(true),
+  DATASETS_SALT: Joi.string().allow("").default(""),
+  DATASETS_SALT_ROTATION_HOURS: Joi.number().integer().min(1).default(24),
+  DATASETS_SALT_RETENTION_WINDOWS: Joi.number().integer().min(0).default(2),
+  DATASETS_PUBLIC_BUCKET: Joi.string().default("vortex-public-datasets"),
+  DATASETS_STORAGE_KIND: Joi.string().valid("local", "memory").default("memory"),
+  DATASETS_LOCAL_DIR: Joi.string().default("./data/datasets"),
+
   // ── WS gateway hardening (issue #455) ─────────────────────────────────────
   WS_MAX_PAYLOAD_BYTES: Joi.number().integer().min(1024).default(16384),
   WS_MAX_CONNECTIONS_PER_IP: Joi.number().integer().min(0).default(20),

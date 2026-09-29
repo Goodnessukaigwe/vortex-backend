@@ -17,6 +17,7 @@ import { SorobanModule } from "../soroban/soroban.module";
 import { AppConfig } from "../config/configuration";
 import { PrismaService } from "../prisma/prisma.service";
 import { GovernanceModule } from "../governance/governance.module";
+import { PricingModule } from "../pricing/pricing.module";
 
 @Module({
   // Both SolversModule and SorobanModule import IntentsModule back, so both
@@ -29,9 +30,10 @@ import { GovernanceModule } from "../governance/governance.module";
     forwardRef(() => SolversModule),
     RoutingModule,
     TokensModule,
+    PricingModule,
     forwardRef(() => SorobanModule),
+    GovernanceModule,
   ],
-  imports: [forwardRef(() => SolversModule), RoutingModule, TokensModule, SorobanModule, GovernanceModule],
   controllers: [IntentsController],
   providers: [
     // Select the persistence adapter based on INTENTS_PERSISTENCE env var.

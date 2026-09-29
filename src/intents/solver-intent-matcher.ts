@@ -40,20 +40,21 @@ export interface SolverMatchPredicate {
  * it is cheap to evaluate (no object allocations per intent check).
  */
 export function buildMatchPredicate(solver: SolverRecord): SolverMatchPredicate {
-  const chainSet = new Set<string>(solver.supportedChains);
-  const tokenSet = new Set<string>(
-    solver.supportedTokens.map((t) => t.toLowerCase()),
-  );
-  const hasBond = BigInt(solver.bondAmount) > 0n;
+  const chains = solver.supportedChains ?? [];
+  const tokens = solver.supportedTokens ?? [];
+  const chainSet = new Set<string>(chains);
+  const tokenSet = new Set<string>(tokens.map((t) => t.toLowerCase()));
+  const hasBond = BigInt(solver.bondAmount ?? "0") > 0n;
 
   return {
     solverAddress: solver.address,
-    supportedChains: [...solver.supportedChains],
-    supportedTokens: [...solver.supportedTokens],
-    bondAmount: solver.bondAmount,
+    supportedChains: [...chains],
+    supportedTokens: [...tokens],
+    bondAmount: solver.bondAmount ?? "0",
     matches(intent: Intent): boolean {
       if (!hasBond) return false;
-      if (!chainSet.has(intent.srcChain)) return false;
+      if (chains.length > 0 && !chainSet.has(intent.srcChain)) return false;
+      if (tokens.length === 0) return true;
       const symbol =
         typeof intent.srcToken === "object" && intent.srcToken !== null
           ? // eslint-disable-next-line @typescript-eslint/no-explicit-any

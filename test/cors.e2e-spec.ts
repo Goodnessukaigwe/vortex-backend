@@ -8,6 +8,7 @@ import { INestApplication, ValidationPipe } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import { WsAdapter } from "@nestjs/platform-ws";
 import { ConfigService } from "@nestjs/config";
+import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import helmet from "helmet";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
@@ -42,7 +43,11 @@ async function createAppWithOrigin(origin: string): Promise<INestApplication> {
 
 async function createAppWithSecurityHeaders(nodeEnv = "development"): Promise<INestApplication> {
   const previousNodeEnv = process.env.NODE_ENV;
+  const previousAllowLocal = process.env.ALLOW_LOCAL_SIGNER_IN_PROD;
   process.env.NODE_ENV = nodeEnv;
+  // The production signer guard refuses a local keypair. This test only checks
+  // that Swagger is not mounted; it is not exercising custody policy.
+  if (nodeEnv === "production") process.env.ALLOW_LOCAL_SIGNER_IN_PROD = "true";
 
   const moduleRef = await Test.createTestingModule({
     imports: [AppModule],
@@ -72,9 +77,20 @@ async function createAppWithSecurityHeaders(nodeEnv = "development"): Promise<IN
   app.useGlobalFilters(new HttpExceptionFilter());
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 
+  if (nodeEnv !== "production") {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle("Vortex Backend")
+      .setDescription("Intent relay API + WebSocket feed for Vortex Protocol")
+      .setVersion("0.1.0")
+      .build();
+    SwaggerModule.setup("docs", app, SwaggerModule.createDocument(app, swaggerConfig));
+  }
+
   await app.init();
 
   process.env.NODE_ENV = previousNodeEnv;
+  if (previousAllowLocal === undefined) delete process.env.ALLOW_LOCAL_SIGNER_IN_PROD;
+  else process.env.ALLOW_LOCAL_SIGNER_IN_PROD = previousAllowLocal;
   return app;
 }
 

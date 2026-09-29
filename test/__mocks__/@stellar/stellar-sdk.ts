@@ -1,16 +1,3 @@
-import * as path from "path";
-
-// The e2e moduleNameMapper maps the bare specifier "^@stellar/stellar-sdk$" to
-// this file (jest.requireActual still goes through moduleNameMapper, so it
-// cannot be used here). Resolve the real package entry by absolute path
-// instead — an absolute path does not match the mapper regex, so the genuine
-// SDK is loaded and re-exported below (only SorobanRpc.Server is replaced).
-/* eslint-disable @typescript-eslint/no-var-requires */
-const actual = require(path.resolve(
-  __dirname,
-  "../../../node_modules/@stellar/stellar-sdk/lib/index.js",
-)) as typeof import("@stellar/stellar-sdk");
-/* eslint-enable @typescript-eslint/no-var-requires */
 /**
  * Hermetic test double for `@stellar/stellar-sdk`.
  *
@@ -33,13 +20,13 @@ const actual = require(path.resolve(
  * only permits `.`, `./contract`, and `./rpc`.
  */
 
-/* eslint-disable @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports */
 import * as path from "node:path";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const real: any = require(
-  path.join(__dirname, "..", "..", "..", "node_modules", "@stellar", "stellar-sdk", "lib", "index.js"),
+/* eslint-disable @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any */
+const actual: any = require(
+  path.resolve(__dirname, "../../../node_modules/@stellar/stellar-sdk/lib/index.js"),
 );
+/* eslint-enable @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any */
 
 const mockServer = {
   getHealth: jest.fn().mockResolvedValue({ status: "ok" }),
@@ -72,58 +59,29 @@ const mockServer = {
 
 const mockServerClass = jest.fn().mockImplementation(() => mockServer);
 
-module.exports = {
-  ...actual,
-  SorobanRpc: {
-    ...actual.SorobanRpc,
-    Server: mockServerClass,
-  },
-  rpc: {
-    ...actual.rpc,
-    Server: mockServerClass,
-/**
- * Network stub. `Api` is spread from the real module so type guards such as
- * `SorobanRpc.Api.isSimulationError` keep working exactly as in production.
- */
-export const SorobanRpc = {
-  ...real.SorobanRpc,
-  Server: jest.fn().mockImplementation(() => mockServer),
+function isSimulationError(response: unknown): boolean {
+  return Boolean(
+    response &&
+      typeof response === "object" &&
+      "error" in (response as Record<string, unknown>) &&
+      (response as Record<string, unknown>).error != null,
+  );
+}
+
+const stubbedRpc = {
+  ...actual.SorobanRpc,
+  Server: mockServerClass,
   Api: {
-    ...real.SorobanRpc?.Api,
-    isSimulationError: (response: unknown): boolean =>
-      Boolean(
-        response &&
-          typeof response === "object" &&
-          "error" in (response as Record<string, unknown>) &&
-          (response as Record<string, unknown>).error != null,
-      ),
+    ...actual.SorobanRpc?.Api,
+    isSimulationError,
   },
 };
 
-// ── Genuine SDK re-exports ───────────────────────────────────────────────────
-// Everything below is the real implementation, re-exported explicitly rather
-// than via `export *` so that the star-export does not shadow the stubbed
-// `SorobanRpc` above and so each name is individually type-checked.
-
-export const Keypair = real.Keypair;
-export const Networks = real.Networks;
-export const StrKey = real.StrKey;
-export const Address = real.Address;
-export const Contract = real.Contract;
-export const Account = real.Account;
-export const Operation = real.Operation;
-export const Transaction = real.Transaction;
-export const FeeBumpTransaction = real.FeeBumpTransaction;
-export const TransactionBuilder = real.TransactionBuilder;
-export const xdr = real.xdr;
-export const nativeToScVal = real.nativeToScVal;
-export const scValToNative = real.scValToNative;
-export const BASE_FEE = real.BASE_FEE;
-export const MuxedAccount = real.MuxedAccount;
-export const hash = real.hash;
-export const Memo = real.Memo;
-export const Timepoint = real.Timepoint;
-export const SorobanDataBuilder = real.SorobanDataBuilder;
-export const authorizeEntry = real.authorizeEntry;
-export const decodeAddressToScVal = real.decodeAddressToScVal;
-export const encodeAddressToScVal = real.encodeAddressToScVal;
+module.exports = {
+  ...actual,
+  SorobanRpc: stubbedRpc,
+  rpc: {
+    ...actual.rpc,
+    Server: mockServerClass,
+  },
+};

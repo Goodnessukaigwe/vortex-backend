@@ -88,6 +88,7 @@ describe("DoS / resource-exhaustion limits (issue #476)", () => {
 
   beforeAll(async () => {
     app = await createTestApp();
+    await app.listen(0);
     httpServer = app.getHttpServer();
   });
 
@@ -164,22 +165,22 @@ describe("DoS / resource-exhaustion limits (issue #476)", () => {
         .expect(400);
     });
 
-    it(`accepts exactly ${BATCH_LOOKUP_MAX_IDS} IDs with 200`, async () => {
+    it(`accepts exactly ${BATCH_LOOKUP_MAX_IDS} IDs with 201`, async () => {
       const atLimit = {
         intentIds: Array.from({ length: BATCH_LOOKUP_MAX_IDS }, (_, i) => `id-${i}`),
       };
-      // 200 expected — none of the IDs exist so the response will be an empty array.
+      // 201 is Nest's default for POST. None of the IDs exist, so the body is empty.
       await request(httpServer)
         .post("/api/v1/intents/batch")
         .send(atLimit)
-        .expect(200);
+        .expect(201);
     });
 
-    it("accepts 1 ID with 200", async () => {
+    it("accepts 1 ID with 201", async () => {
       await request(httpServer)
         .post("/api/v1/intents/batch")
         .send({ intentIds: ["does-not-exist"] })
-        .expect(200);
+        .expect(201);
     });
 
     it("rejects a non-array intentIds with 400", async () => {

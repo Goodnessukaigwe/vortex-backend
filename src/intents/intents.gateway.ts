@@ -294,9 +294,7 @@ export class IntentsGateway
     this.alive.set(client, true);
     this.metricsService?.incWsConnection();
 
-    client.on("message", (raw) => {
-      void this.handleMessage(client, raw);
-    });
+    client.on("message", (raw) => this.handleMessage(client, raw));
 
     client.on("pong", () => {
       this.alive.set(client, true);
@@ -724,7 +722,9 @@ export class IntentsGateway
       // Non-fatal — solver can fall back to GET /solvers/:address/eligible-intents.
     }
 
-    logger.info(`ws solver auth ok: address=${solver} chains=${solverRecord.supportedChains.join(",")} tokens=${solverRecord.supportedTokens.join(",")}`);
+    logger.info(
+      `ws solver auth ok: address=${solver} chains=${(solverRecord.supportedChains ?? []).join(",")} tokens=${(solverRecord.supportedTokens ?? []).join(",")}`,
+    );
   }
 
   /**

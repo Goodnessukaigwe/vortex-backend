@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsIn,
   IsInt,
   IsOptional,
@@ -105,4 +106,20 @@ export class CreateIntentDto {
   @IsOptional()
   @IsString()
   idempotencyKey?: string;
+
+  @ApiPropertyOptional({
+    description:
+      "When true, the user accepts minDstAmount below MAX_USER_SLIPPAGE_BPS of oracle fair value. Must be accompanied by highSlippageSignature.",
+  })
+  @IsOptional()
+  @IsBoolean()
+  acknowledgeHighSlippage?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      "Base64 Ed25519 signature of acknowledge-high-slippage:<user>:<srcAmount>:<minDstAmount>, required when acknowledgeHighSlippage is true.",
+  })
+  @IsOptional()
+  @IsString()
+  highSlippageSignature?: string;
 }

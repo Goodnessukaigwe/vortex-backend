@@ -3,8 +3,8 @@ import { Test } from "@nestjs/testing";
 import { ConfigService } from "@nestjs/config";
 import { WsAdapter } from "@nestjs/platform-ws";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
-import { json } from "express";
 import { json, Request, Response, NextFunction } from "express";
+import helmet from "helmet";
 import { AppModule } from "../../src/app.module";
 import { AppConfig } from "../../src/config/configuration";
 import { HttpExceptionFilter } from "../../src/common/http-exception.filter";
@@ -42,6 +42,15 @@ export async function createTestApp(): Promise<INestApplication> {
 
   // Mirror the production body-size limit so 413 tests behave correctly
   app.use(json({ limit: BODY_SIZE_LIMIT }));
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+      hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+      frameguard: { action: "deny" },
+      noSniff: true,
+      referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+    }),
+  );
 
   // Mirror the JSON depth-check middleware from main.ts (issue #476)
   app.use((req: Request, res: Response, next: NextFunction) => {

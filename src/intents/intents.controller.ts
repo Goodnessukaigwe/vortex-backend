@@ -46,7 +46,13 @@ import {
   buildAcceptMessage,
   buildCancelMessage,
   buildFillMessage,
+  buildHighSlippageAckMessage,
 } from "../common/stellar-signature";
+import { AggregatorService } from "../pricing/aggregator.service";
+import {
+  USD_PRICE_SCALE,
+  validateMinDstAmount,
+} from "../pricing/min-dst-amount.validation";
 import {
   applyVarianceScale,
   calculateProtocolFee,
@@ -76,7 +82,8 @@ export class IntentsController {
     private readonly tokensService: TokensService,
     private readonly routingService: RoutingService,
     private readonly killSwitch: KillSwitchService,
-    config: ConfigService<AppConfig, true>,
+    private readonly aggregator: AggregatorService,
+    private readonly config: ConfigService<AppConfig, true>,
   ) {
     this.canary = new Set(config.get("canaryAddresses", { infer: true }) ?? []);
   }
@@ -242,11 +249,23 @@ export class IntentsController {
   @Post()
   @UseGuards(UserThrottlerGuard, KillSwitchGuard)
   @KillSwitchGate({ operation: "create" })
+  @ApiOperation({
+    summary: "Create a swap intent",
+    description:
+      "Validates `minDstAmount` against the oracle aggregator's fair destination value. " +
+      "Slippage above `MAX_USER_SLIPPAGE_BPS` requires `acknowledgeHighSlippage` plus a signed " +
+      "`acknowledge-high-slippage:<user>:<srcAmount>:<minDstAmount>` message. Premium above " +
+      "`MAX_PREMIUM_BPS` is always rejected. The 201 body includes `fairValue` (dst base units, " +
+      "or null on oracle fail-open) and `slippageBps`.",
+  })
   @ApiTooManyRequestsResponse({
     description:
       "Rate limit exceeded — max 10 intent creations per user per 60 s (or 100 req/min per IP globally)",
   })
-  @ApiBadRequestResponse({ description: "Invalid request body" })
+  @ApiBadRequestResponse({
+    description:
+      "Invalid request body, excessive slippage/premium vs oracle fair value, or oracle unavailable above the fail-open USD threshold",
+  })
   @ApiConflictResponse({
     description: `Open-intent cap reached — a single user may not hold more than ${MAX_OPEN_INTENTS_PER_USER} open/accepted intents simultaneously`,
   })
@@ -271,6 +290,51 @@ export class IntentsController {
       dto.srcTokenAddress,
     );
     const dstToken = await this.tokensService.resolveDstTokenOrThrow(dto.dstTokenContract);
+
+    if (dto.acknowledgeHighSlippage === true) {
+      if (!dto.highSlippageSignature) {
+        throw new BadRequestException(
+          "acknowledgeHighSlippage requires highSlippageSignature over acknowledge-high-slippage:<user>:<srcAmount>:<minDstAmount>",
+        );
+      }
+      verifyStellarSignature(
+        dto.user,
+        buildHighSlippageAckMessage(dto.user, dto.srcAmount, dto.minDstAmount),
+        dto.highSlippageSignature,
+      );
+    }
+
+    const snapshot = await this.aggregator.getPriceSnapshot({
+      srcChain: dto.srcChain as SupportedChain,
+      srcTokenAddress: dto.srcTokenAddress,
+      dstTokenContract: dto.dstTokenContract,
+    });
+    const oracle = this.config.get("oracle", { infer: true });
+    const minDstCheck = validateMinDstAmount(
+      {
+        srcAmount: dto.srcAmount,
+        srcDecimals: srcToken.decimals,
+        dstDecimals: dstToken.decimals,
+        minDstAmount: dto.minDstAmount,
+        acknowledgeHighSlippage: dto.acknowledgeHighSlippage === true,
+        nowMs: Date.now(),
+        snapshot,
+      },
+      {
+        maxUserSlippageBps: BigInt(oracle.maxUserSlippageBps),
+        maxPremiumBps: BigInt(oracle.maxPremiumBps),
+        failOpenMaxUsd: BigInt(Math.trunc(oracle.failOpenMaxUsd)) * USD_PRICE_SCALE,
+        maxStalenessMs: oracle.maxStalenessMs,
+      },
+    );
+    if (!minDstCheck.ok) {
+      throw new BadRequestException({
+        error: minDstCheck.error,
+        code: minDstCheck.code,
+        fairValue: minDstCheck.fairValue?.toString() ?? null,
+        slippageBps: minDstCheck.slippageBps?.toString() ?? null,
+      });
+    }
 
     const intent = await this.intentsService.create(
       {
@@ -297,7 +361,11 @@ export class IntentsController {
       dto.idempotencyKey,
     );
     this.intentsGateway.broadcast({ type: "intent_created", intent });
-    return intent;
+    return {
+      ...intent,
+      fairValue: minDstCheck.fairValue?.toString() ?? null,
+      slippageBps: minDstCheck.slippageBps.toString(),
+    };
   }
 
   /**

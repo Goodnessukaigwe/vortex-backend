@@ -22,6 +22,11 @@ import WebSocket from "ws";
 import { createTestApp } from "../utils/create-test-app";
 import { IntentsGateway } from "../../src/intents/intents.gateway";
 
+// Fan-out opens hundreds of sockets from one loopback address. The production
+// per-IP cap (default 20) would reject the rest of the tier.
+process.env.WS_MAX_CONNECTIONS_PER_IP = "10000";
+process.env.WS_MAX_CONNECTIONS = "10000";
+
 // ── tunables ──────────────────────────────────────────────────────────────────
 
 /** Subscriber counts to exercise. Each tier runs as a separate test case. */
@@ -195,6 +200,8 @@ describe("WS broadcast fan-out load test (#84)", () => {
 
   afterAll(async () => {
     await app.close();
+    delete process.env.WS_MAX_CONNECTIONS_PER_IP;
+    delete process.env.WS_MAX_CONNECTIONS;
   }, 15_000);
 
   for (const subscriberCount of SUBSCRIBER_TIERS) {

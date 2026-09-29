@@ -5,7 +5,7 @@
  * against a real booted Nest app (no contract configured → code defaults).
  */
 
-import * as request from "supertest";
+import request from "supertest";
 import { INestApplication } from "@nestjs/common";
 import { createTestApp } from "./utils/create-test-app";
 

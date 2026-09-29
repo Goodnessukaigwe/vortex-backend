@@ -22,7 +22,7 @@ const validCreateBody = {
   dstTokenContract: "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
   dstTokenSymbol: "USDC",
   dstTokenDecimals: 7,
-  minDstAmount: "990000",
+  minDstAmount: "9900000",
 };
 
 describe("Audit trail e2e (#217)", () => {
