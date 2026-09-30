@@ -28,6 +28,11 @@ Commit message format is enforced via [commitlint](https://commitlint.js.org/) s
 ## [Unreleased]
 
 ### Added
+- Oracle-referenced `minDstAmount` validation on intent create: fair destination
+  value from the aggregator, rejection of slippage above `MAX_USER_SLIPPAGE_BPS`
+  unless the user signs `acknowledgeHighSlippage`, rejection of premium above
+  `MAX_PREMIUM_BPS`, and fail-open/fail-closed oracle policy
+  (Closes #434)
 - Transactional outbox for on-chain writes: `onchain_outbox` table, intent change + outbox
   row committed in one Prisma transaction, `OutboxRelayService` (SKIP LOCKED claims, per-intent
   ordering, envelope hash persisted before submit, dead-lettering with alert),

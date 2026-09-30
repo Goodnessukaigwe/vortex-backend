@@ -43,7 +43,7 @@ const BASE_INTENT = {
   dstTokenContract: "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
   dstTokenSymbol: "USDC",
   dstTokenDecimals: 7,
-  minDstAmount: "1980000",
+  minDstAmount: "19800000",
 };
 
 /** Shape IntentsService.create() expects (already-resolved token objects). */
@@ -125,7 +125,7 @@ describe("Intent lifecycle e2e (create → accept → fill)", () => {
     const betaFillSig = sign(BETA_KP, buildFillMessage(intentId, BETA_KP.publicKey()));
     await request(app.getHttpServer())
       .post(`/api/v1/intents/${intentId}/fill`)
-      .send({ solver: BETA_KP.publicKey(), fillAmount: "1990000", signature: betaFillSig })
+      .send({ solver: BETA_KP.publicKey(), fillAmount: "19900000", signature: betaFillSig })
       .expect(403);
 
     // State must still be accepted after all guard rejections
@@ -142,7 +142,7 @@ describe("Intent lifecycle e2e (create → accept → fill)", () => {
       .post(`/api/v1/intents/${intentId}/fill`)
       .send({
         solver: ALPHA_KP.publicKey(),
-        fillAmount: "1990000",
+        fillAmount: "19900000",
         txHash: "lifecycle-e2e-tx-hash",
         signature: alphaFillSig,
       })
@@ -150,7 +150,7 @@ describe("Intent lifecycle e2e (create → accept → fill)", () => {
 
     expect(fillRes.body.state).toBe("filled");
     expect(fillRes.body.solver).toBe(ALPHA_KP.publicKey());
-    expect(fillRes.body.fillAmount).toBe("1990000");
+    expect(fillRes.body.fillAmount).toBe("19900000");
     expect(fillRes.body.txHash).toBe("lifecycle-e2e-tx-hash");
     expect(typeof fillRes.body.filledAt).toBe("number");
 
@@ -160,7 +160,7 @@ describe("Intent lifecycle e2e (create → accept → fill)", () => {
       .expect(200);
     expect(getAfterFill.body.state).toBe("filled");
     expect(getAfterFill.body.solver).toBe(ALPHA_KP.publicKey());
-    expect(getAfterFill.body.fillAmount).toBe("1990000");
+    expect(getAfterFill.body.fillAmount).toBe("19900000");
     expect(getAfterFill.body.txHash).toBe("lifecycle-e2e-tx-hash");
     expect(typeof getAfterFill.body.filledAt).toBe("number");
 
@@ -168,7 +168,7 @@ describe("Intent lifecycle e2e (create → accept → fill)", () => {
     const refillSig = sign(ALPHA_KP, buildFillMessage(intentId, ALPHA_KP.publicKey()));
     await request(app.getHttpServer())
       .post(`/api/v1/intents/${intentId}/fill`)
-      .send({ solver: ALPHA_KP.publicKey(), fillAmount: "1990000", signature: refillSig })
+      .send({ solver: ALPHA_KP.publicKey(), fillAmount: "19900000", signature: refillSig })
       .expect(409);
   });
 

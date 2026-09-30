@@ -66,6 +66,15 @@ export async function createTestApp(): Promise<INestApplication> {
 
   // Mirror the production body-size limit so 413 tests behave correctly
   app.use(json({ limit: BODY_SIZE_LIMIT }));
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+      hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+      frameguard: { action: "deny" },
+      noSniff: true,
+      referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+    }),
+  );
 
   // Mirror the JSON depth-check middleware from main.ts (issue #476)
   app.use((req: Request, res: Response, next: NextFunction) => {

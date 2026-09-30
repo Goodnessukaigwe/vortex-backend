@@ -28,7 +28,7 @@ GET  /api/v1/intents              — list intents (filter by state, user, chain
 GET  /api/v1/intents/open         — all open intents (solver view)
 GET  /api/v1/intents/:id          — single intent
 GET  /api/v1/intents/user/:addr   — intents for a user
-POST /api/v1/intents              — create intent
+POST /api/v1/intents              — create intent (oracle-checked minDstAmount; 201 includes fairValue + slippageBps)
 POST /api/v1/intents/:id/accept   — solver accepts
 POST /api/v1/intents/:id/fill     — solver fills
 POST /api/v1/intents/:id/cancel   — user cancels
@@ -163,6 +163,10 @@ from those that are safe to leave at their testnet/dev defaults.
 | `LEADER_ELECTION_ENABLED` | Recommended (multi-replica) | `false` | Set to `true` when running N > 1 replicas to ensure singleton workers run on exactly one pod. Requires `DATABASE_URL` to point at a live Postgres instance. **Do not use PgBouncer in transaction-pooling mode** — see [Leader Election runbook](./docs/runbooks/leader-election.md). |
 | `LEADER_ELECTION_HEARTBEAT_MS` | Optional | `5000` | Heartbeat interval in ms. Lower = faster failover, higher DB load. Default gives ≤ 15 s failover. |
 | `PORT` | Optional | `4000` | Change if the container port mapping differs |
+| `MAX_USER_SLIPPAGE_BPS` | Optional | `100` | Max user slippage vs oracle fair `minDstAmount` (1% default). Higher slippage requires a signed `acknowledgeHighSlippage`. |
+| `MAX_PREMIUM_BPS` | Optional | `50` | Max `minDstAmount` premium above oracle fair value; always rejected above this. |
+| `ORACLE_FAIL_OPEN_MAX_USD` | Optional | `100` | When oracle prices are missing/stale, intents with source notional at or below this USD amount are still created. |
+| `ORACLE_MAX_STALENESS_MS` | Optional | `60000` | Price snapshots older than this are treated as unavailable. |
 
 For a production `.env` template, copy `.env.mainnet.example` — every
 `<CHANGE_ME>` value corresponds to a "required for production" row above.
