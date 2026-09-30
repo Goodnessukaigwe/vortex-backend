@@ -261,7 +261,7 @@ describe("IntentsController (e2e)", () => {
       .expect(201);
 
     const intentsService = app.get(IntentsService);
-    await intentsService.update(created.intentId, { minDstAmount: "not-a-number" });
+    await intentsService.update(created.intentId, { minDstAmount: "not-a-number" }, (await intentsService.get(created.intentId))!.version);
 
     const fillSig = sign(ALPHA_KP, buildFillMessage(created.intentId, ALPHA_KP.publicKey()));
     const res = await request(app.getHttpServer())

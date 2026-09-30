@@ -98,6 +98,19 @@ model Intent {
   feeAmount      String?     @map("fee_amount")
   /// On-chain transaction hash of the Stellar fill transaction.
   txHash         String?     @map("tx_hash")
+  /// Unix epoch seconds – set when state becomes `slashed`.
+  slashedAt      Int?        @map("slashed_at")
+  slashReason    String?     @map("slash_reason")
+  /// Optimistic-concurrency version, incremented on every update (issue #405).
+  version        Int         @default(0) @map("version")
+  /// Caller-supplied idempotency key for POST /intents; unique across replicas (issue #404).
+  idempotencyKey String?     @unique @map("idempotency_key")
+  /// Source-chain escrow deposit confirmed (issue #403); unverified intents are not fillable.
+  srcVerified    Boolean     @default(false) @map("src_verified")
+  /// EVM deposit transaction hash supplied at creation, if any.
+  srcTxHash      String?     @map("src_tx_hash")
+  /// Last verification result: status, block, received amount, detail.
+  srcVerification Json?      @map("src_verification")
 
   @@index([user])
   @@index([state])
@@ -164,6 +177,30 @@ model IntentAuditLog {
 
   @@index([intentId, timestamp(sort: Asc)], name: "audit_log_intent_idx")
   @@map("intent_audit_log")
+}
+
+// ─── ContractUpgrade ─────────────────────────────────────────────────────────
+// Append-only history of detected WASM upgrades of the contracts the backend
+// writes to (issue #402). Written by ContractVersionService when a poll sees
+// a new hash or an upgrade event is ingested.
+
+model ContractUpgrade {
+  id               BigInt   @id @default(autoincrement()) @map("id")
+  /// "settlement" | "solverRegistry"
+  contractName     String   @map("contract_name")
+  contractId       String   @map("contract_id")
+  previousWasmHash String?  @map("previous_wasm_hash")
+  wasmHash         String?  @map("wasm_hash")
+  /// ABI version the new hash maps to; null when unsupported.
+  abiVersion       String?  @map("abi_version")
+  /// "poll" | "event"
+  source           String   @map("source")
+  ledger           Int?     @map("ledger")
+  txHash           String?  @map("tx_hash")
+  detectedAt       DateTime @default(now()) @map("detected_at") @db.Timestamptz
+
+  @@index([contractId, detectedAt], name: "contract_upgrades_contract_idx")
+  @@map("contract_upgrades")
 }
 
 // ─── Token ───────────────────────────────────────────────────────────────────
