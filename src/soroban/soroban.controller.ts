@@ -16,6 +16,7 @@ export class SorobanController {
   constructor(private readonly sorobanService: SorobanService) {}
 
   @Get("health")
+  @UseGuards(AccountRateLimitGuard)
   @ApiOkResponse({
     description:
       "Per-endpoint health status for the Soroban RPC pool. In single-endpoint mode a " +
@@ -49,6 +50,7 @@ export class SorobanController {
   }
 
   @Get("ledger")
+  @UseGuards(AccountRateLimitGuard)
   @ApiOkResponse({
     description: "Latest closed ledger as reported by the Soroban RPC node.",
     schema: {
@@ -66,6 +68,7 @@ export class SorobanController {
   }
 
   @Get("network")
+  @UseGuards(AccountRateLimitGuard)
   @ApiOkResponse({
     description: "Network passphrase and protocol metadata for the configured RPC node.",
     schema: {
