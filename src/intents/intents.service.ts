@@ -24,6 +24,7 @@ import { MetricsService } from "../metrics/metrics.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { ProtocolParamsService } from "../governance/params.service";
 import { FeatureFlagService } from "../flags/feature-flag.service";
+import { IntentDeadlineScheduler } from "./intents-deadline.jobs";
 
 const TERMINAL_STATES: IntentState[] = ["filled", "cancelled", "expired", "slashed"];
 
@@ -130,6 +131,7 @@ export class IntentsService {
      */
     @Optional() private readonly metricsService?: MetricsService,
     @Optional() private readonly flags?: FeatureFlagService,
+    @Optional() private readonly deadlines?: IntentDeadlineScheduler,
   ) {}
 
   /**
@@ -267,6 +269,7 @@ export class IntentsService {
     }
 
     await this.repo.save(intent);
+    this.deadlines?.scheduleExpire(intent);
     // Creation is the entry edge of the funnel: the `vortex:intent:*` recording
     // rules count transitions *into* each state, so without this the intent
     // dashboard would start every conversion ratio from zero. `from_state` is
@@ -513,7 +516,10 @@ export class IntentsService {
     const fillWindow =
       CHAIN_FILL_WINDOW_DEFAULTS[intent.srcChain] ?? DEFAULT_FILL_WINDOW_SECONDS;
     const updated = await this.repo.acceptIfOpen(id, solver, nowSec + fillWindow, nowSec);
-    if (updated !== null) this.countTransition("open", "accepted");
+    if (updated !== null) {
+      this.countTransition("open", "accepted");
+      this.deadlines?.scheduleFillWindow(updated);
+    }
     if (this.beginShadowObservation()) {
       this.observeAccept(updated ?? intent, solver, updated !== null);
     }
@@ -702,7 +708,9 @@ export class IntentsService {
    * or already has a later deadline.
    */
   async extendDeadlineIfAccepted(id: string, newDeadline: number): Promise<Intent | null> {
-    return this.repo.extendDeadlineIfAccepted(id, newDeadline);
+    const updated = await this.repo.extendDeadlineIfAccepted(id, newDeadline);
+    if (updated) this.deadlines?.scheduleFillWindow(updated);
+    return updated;
   }
 
   // ---------------------------------------------------------------------------
