@@ -33,6 +33,16 @@ enum SupportedChain {
   avalanche
 }
 
+/// Registry lifecycle. Delisted rows stay in the table so existing intents
+/// that already copied the token metadata keep resolving.
+enum TokenStatus {
+  active
+  paused
+  delisted
+
+  @@map("token_status")
+}
+
 // ─── Kill-switch scopes (issue #477) ──────────────────────────────────────────
 // A switch is addressed by exactly one of four mutually-exclusive scopes.
 // `global` has no chain/token; `chain` sets chain only; `token` sets chain +
@@ -220,6 +230,12 @@ model Token {
   priceUsd  Float?         @map("price_usd")
   /// Whether this is a destination-side Stellar token.
   isStellar Boolean        @default(false) @map("is_stellar")
+  /// active tokens are listed; paused stay listed but are not offered for new
+  /// intents; delisted are hidden from discovery and still readable by id.
+  status    TokenStatus    @default(active) @map("status")
+  /// evm | stellar-sac | stellar-classic. String so classic and SAC stay distinct
+  /// without a second database enum.
+  assetKind String         @default("evm") @map("asset_kind")
 
   @@unique([address, chain])
   @@index([chain])
